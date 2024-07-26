@@ -1,24 +1,24 @@
 from typing import Optional, List
 from sqlalchemy import ForeignKey, Integer, String, create_engine
-from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
+from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase, QueryPropertyDescriptor
 from sqlalchemy.orm import sessionmaker, scoped_session
 from pathlib import Path
 import importlib.resources
 
 DATABASE_PATH = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'cda_data.db'))
-DATABASE_URL = f'sqlite:///{DATABASE_PATH}'
+DATABASE_URL = f'sqlite:////{DATABASE_PATH}'
 
 e = create_engine(DATABASE_URL, echo=True)
 Session = scoped_session(sessionmaker(e))
 
 
 class Base(DeclarativeBase):
-    query = Session.query_property()
     pass
 
 
 class CDASubject(Base):
     __tablename__ = 'subject'
+    query: QueryPropertyDescriptor = Session.query_property()
     id: Mapped[str] = mapped_column(String, primary_key=True)
     species: Mapped[Optional[str]] = mapped_column(String)
     sex: Mapped[Optional[str]] = mapped_column(String)
@@ -36,6 +36,7 @@ class CDASubject(Base):
 
 class CDAResearchSubject(Base):
     __tablename__ = 'researchsubject'
+    query: QueryPropertyDescriptor = Session.query_property()
     id: Mapped[str] = mapped_column(String, primary_key=True)
     member_of_research_project: Mapped[Optional[str]] = mapped_column(String)
     primary_diagnosis_condition: Mapped[Optional[str]] = mapped_column(String)
@@ -58,6 +59,7 @@ class CDAResearchSubject(Base):
 
 class CDASubjectResearchSubject(Base):
     __tablename__ = 'subject_researchsubject'
+    query: QueryPropertyDescriptor = Session.query_property()
     subject_id: Mapped[str] = mapped_column(ForeignKey("subject.id"), primary_key=True)
     researchsubject_id: Mapped[str] = mapped_column(ForeignKey("researchsubject.id"), primary_key=True)
     subject: Mapped["CDASubject"] = relationship(
@@ -70,6 +72,7 @@ class CDASubjectResearchSubject(Base):
 
 class CDADiagnosis(Base):
     __tablename__ = 'diagnosis'
+    query: QueryPropertyDescriptor = Session.query_property()
     id: Mapped[str] = mapped_column(String, primary_key=True)
     primary_diagnosis: Mapped[Optional[str]] = mapped_column(String)
     age_at_diagnosis: Mapped[Optional[int]] = mapped_column(Integer)
@@ -85,6 +88,7 @@ class CDADiagnosis(Base):
 
 class CDAResearchSubjectDiagnosis(Base):
     __tablename__ = 'researchsubject_diagnosis'
+    query: QueryPropertyDescriptor = Session.query_property()
     researchsubject_id: Mapped[str] = mapped_column(ForeignKey('researchsubject.id'), primary_key=True)
     diagnosis_id: Mapped[str] = mapped_column(ForeignKey('diagnosis.id'), primary_key=True)
     diagnosis: Mapped["CDADiagnosis"] = relationship(
@@ -97,6 +101,7 @@ class CDAResearchSubjectDiagnosis(Base):
 
 class CDATreatment(Base):
     __tablename__ = 'treatment'
+    query: QueryPropertyDescriptor = Session.query_property()
     id: Mapped[str] = mapped_column(String, primary_key=True)
     treatment_type: Mapped[Optional[str]] = mapped_column(String)
     treatment_outcome: Mapped[Optional[str]] = mapped_column(String)
@@ -115,6 +120,7 @@ class CDATreatment(Base):
 
 class CDAResearchSubjectTreatment(Base):
     __tablename__ = 'researchsubject_treatment'
+    query: QueryPropertyDescriptor = Session.query_property()
     researchsubject_id: Mapped[str] = mapped_column(ForeignKey('researchsubject.id'), primary_key=True)
     treatment_id: Mapped[str] = mapped_column(ForeignKey('treatment.id'), primary_key=True)
     researchsubject: Mapped["CDAResearchSubject"] = relationship(

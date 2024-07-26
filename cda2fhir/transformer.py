@@ -14,7 +14,7 @@ class PatientTransformer:
 
     def subject_to_patient(self, subject: CDASubject) -> Patient:
         """transform CDA Subject to FHIR Patient."""
-        print(f"Transforming subject: {subject.id}")
+        # print(f"Transforming subject: {subject.id}")
         subject_id_system = "".join(["https://cda.readthedocs.io/", "subject_id"])
         subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id)})
 
@@ -50,9 +50,8 @@ class PatientTransformer:
 
     def transform_human_subjects(self, subjects: list[CDASubject]) -> list[Patient]:
         """transform human CDA Subjects to FHIR Patients."""
-        # TODO: filter will not get out of loop on a list of CDASubbjects
-        # human_subjects = subject.query.filter(subject.species == 'Homo sapiens').all()
-        # print('**** human_subjects: ', human_subjects[0].species, len(human_subjects))
+        human_subjects = [subject.query.filter(subject.species == 'Homo sapiens') for subject in subjects]
+        print('**** human_subjects: ', human_subjects.__getitem__(0), len(human_subjects))
         patients = [self.subject_to_patient(subject) for subject in subjects]
         return patients
 

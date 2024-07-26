@@ -1,8 +1,21 @@
+import json
+import orjson
+from pathlib import Path
+import importlib.resources
 from cda2fhir.database import init_db
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment
 from cda2fhir.transformer import PatientTransformer
+
+
+def fhir_ndjson(entity, out_path):
+    if isinstance(entity, list):
+        with open(out_path, 'w', encoding='utf8') as file:
+            file.write('\n'.join(map(lambda e: json.dumps(e, ensure_ascii=False), entity)))
+    else:
+        with open(out_path, 'w', encoding='utf8') as file:
+            file.write(json.dumps(entity, ensure_ascii=False))
 
 
 def cda2fhir():
@@ -41,9 +54,12 @@ def cda2fhir():
             print(f"id: {treatment.id}, therapeutic_agent: {treatment.therapeutic_agent}")
 
         """try subject to FHIR patient transformation"""
-        print("**** subjects type:", type(subjects[0]))
+        # print("**** subjects type:", type(subjects[0]))
         patients = transformer.transform_human_subjects(subjects)
-        print(patients)
+        save = False
+        if save:
+            patients = [orjson.loads(patient.json()) for patient in patients]
+            fhir_ndjson(patients, str(Path(importlib.resources.files('cda2fhir').parent / 'data' / "Patient.ndjson")))
 
     finally:
         print("****** Closing Session ******")
