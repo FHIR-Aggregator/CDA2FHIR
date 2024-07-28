@@ -56,7 +56,7 @@ def cda2fhir():
         """try subject to FHIR patient transformation"""
         # print("**** subjects type:", type(subjects[0]))
         patients = transformer.transform_human_subjects(subjects)
-        save = False
+        save = True
         if save:
             patients = [orjson.loads(patient.json()) for patient in patients]
             fhir_ndjson(patients, str(Path(importlib.resources.files('cda2fhir').parent / 'data' / "Patient.ndjson")))

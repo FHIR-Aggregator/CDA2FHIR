@@ -18,20 +18,38 @@ class PatientTransformer:
         subject_id_system = "".join(["https://cda.readthedocs.io/", "subject_id"])
         subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id)})
 
+        extensions = []
+        birthSex = self.map_gender(subject.sex)
+        if birthSex:
+            extensions.append(birthSex)
+
         # minimal patient for testing
         patient = Patient(**{
             "id": self.mint_id(identifier=subject_id_identifier, resource_type="Patient"),
             "identifier": [subject_id_identifier],
-            "deceasedBoolean": self.map_vital_status(subject.vital_status)
+            "deceasedBoolean": self.map_vital_status(subject.vital_status),
         })
+
+        if extensions:
+            patient.extension = extensions
+
         return patient
 
     @staticmethod
     def map_gender(sex: str) -> Extension:
         """map CDA sex to FHIR gender."""
+        sex = sex.strip() if sex else sex
+
         female = Extension(**{"url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex", "valueCode": "F"})
         male = Extension(**{"url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex", "valueCode": "M"})
-        return male if sex == 'male' else female if sex == 'female' else None # remove None
+        unknown = Extension(**{"url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex", "valueCode": "UNK"})
+
+        if sex in ['male', 'Male', 'M']:
+            return male
+        elif sex in ['female', 'Female', 'F']:
+            return female
+        elif sex in ['Unspecified', 'Not specified in data', 'O', 'U', '0000']: # clarify definitions
+            return unknown
 
     @staticmethod
     def map_vital_status(vital_status: str) -> bool:
