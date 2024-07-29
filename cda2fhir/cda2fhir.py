@@ -57,7 +57,7 @@ def cda2fhir():
         save = True
         if save:
             patients = [orjson.loads(patient.json()) for patient in patients]
-            fhir_ndjson(patients, str(Path(importlib.resources.files('cda2fhir').parent / 'data' / "Patient.ndjson")))
+            fhir_ndjson(patients, str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Patient.ndjson")))
 
     finally:
         print("****** Closing Session ******")

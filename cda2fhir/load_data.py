@@ -63,27 +63,27 @@ def load_data():
     # clear_table(ResearchSubjectSpecimen, session)
 
     try:
-        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'subject.json')), CDASubject,
+        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'subject.json')), CDASubject,
                         session)
-        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'researchsubject.json')),
+        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'researchsubject.json')),
                         CDAResearchSubject, session)
         load_tsv_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'association_tables' / 'subject_researchsubject.tsv')),
+            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_researchsubject.tsv')),
                        CDASubjectResearchSubject, session)
 
-        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'diagnosis.json')), CDADiagnosis,
+        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'diagnosis.json')), CDADiagnosis,
                         session)
-        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'treatment.json')), CDATreatment,
+        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'treatment.json')), CDATreatment,
                         session)
         load_tsv_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'association_tables' / 'researchsubject_diagnosis.tsv')),
+            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_diagnosis.tsv')),
                        CDAResearchSubjectDiagnosis, session)
         load_tsv_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'association_tables' / 'researchsubject_treatment.tsv')),
+            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_treatment.tsv')),
                        CDAResearchSubjectTreatment, session)
 
-        # load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'specimen.json')), Specimen, session)
-        # load_tsv_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'association_tables' / 'researchsubject_specimen.tsv')), ResearchSubjectSpecimen, session)
+        # load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'specimen.json')), Specimen, session)
+        # load_tsv_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' /  'association_tables' / 'researchsubject_specimen.tsv')), ResearchSubjectSpecimen, session)
     finally:
         session.expire_all()
         session.close()

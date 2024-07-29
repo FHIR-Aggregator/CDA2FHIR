@@ -23,7 +23,14 @@ class PatientTransformer:
         if birthSex:
             extensions.append(birthSex)
 
-        # minimal patient for testing
+        usCoreRace = self.map_race(subject.race)
+        if usCoreRace:
+            extensions.append(usCoreRace)
+
+        usCoreEthnicity = self.map_ethnicity(subject.ethnicity)
+        if usCoreEthnicity:
+            extensions.append(usCoreEthnicity)
+
         patient = Patient(**{
             "id": self.mint_id(identifier=subject_id_identifier, resource_type="Patient"),
             "identifier": [subject_id_identifier],
@@ -40,16 +47,65 @@ class PatientTransformer:
         """map CDA sex to FHIR gender."""
         sex = sex.strip() if sex else sex
 
-        female = Extension(**{"url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex", "valueCode": "F"})
-        male = Extension(**{"url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex", "valueCode": "M"})
-        unknown = Extension(**{"url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex", "valueCode": "UNK"})
+        female = Extension(
+            **{"url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex", "valueCode": "F"})
+        male = Extension(
+            **{"url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex", "valueCode": "M"})
+        unknown = Extension(
+            **{"url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex", "valueCode": "UNK"})
 
         if sex in ['male', 'Male', 'M']:
             return male
         elif sex in ['female', 'Female', 'F']:
             return female
-        elif sex in ['Unspecified', 'Not specified in data', 'O', 'U', '0000']: # clarify definitions
+        elif sex in ['Unspecified', 'Not specified in data', 'O', 'U', '0000']:  # clarify definitions
             return unknown
+
+    @staticmethod
+    def map_ethnicity(ethnicity: str) -> Extension:
+        url = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race"
+        cda_ethnicity = [None, 'not hispanic or latino', 'hispanic or latino',
+                         'Not Hispanic or Latino', 'Hispanic or Latino', 'White', 'Asian',
+                         'Black', '2', '1', 'C', '102', '01', '96', 'Non-Hispanic Non',
+                         '98', 'anonymous', '7', 'W', 'REMOVED', 'WHITE', 'Caucasian',
+                         '2131-1', 'Non-Hispanic [8]', 'UNK', 'B', 'Not Hispanic or',
+                         'Non-Hispanic/Non', 'Hispanic/Latino', 'H', 'Non-Hispanic',
+                         'Non-Hispanic [9]', 'Not Hispanic Lat', 'ETHNICGRP11356', 'A', 'N',
+                         '[1]', '6', 'ETHNICGRP1683', 'Non-Hispanic [1]', 'ETHNICGRP1730',
+                         '5', '02', 'white-ns', 'Black or African', 'Native Hawaiian',
+                         'More than one', 'American Indian', 'Unknown [3]',
+                         'Patient Refused', 'Hispanic or Lati', 'Hispanic/Spanish', 'WHT',
+                         'WH', 'Mexican, Mexican', 'CAUCASI', 'ETHNICGRP871', '104',
+                         'Pacific Islander', 'Hispanic Latino', 'Patient Declined',
+                         'anonymized']
+
+        ethnicity_extention = None
+        if ethnicity in ['White', 'W', 'WHITE', 'WHT']:
+            ethnicity_extention = Extension(**{'url': url, 'valueString': 'White'})
+        elif ethnicity:
+            ethnicity_extention = Extension(**{'url': url, 'valueString': 'not reported'})
+        return ethnicity_extention
+
+    @staticmethod
+    def map_race(race: str) -> Extension:
+        url = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity"
+        cda_race = [None, 'white', 'black or african american', 'asian',
+                    'native hawaiian or other pacific islander',
+                    'american indian or alaska native', 'White',
+                    'Black or African American', 'Asian',
+                    'Native Hawaiian or other Pacific Islander',
+                    'American Indian or Alaska Native',
+                    'Native Hawaiian or Other Pacific Islander',
+                    'Black or African American;White']
+
+        race_extention = None
+        if race in ['white', 'White']:
+            race_extention = Extension(**{'url': url, 'valueString': 'White'})
+        elif race in ['black or african american', 'Black or African American']:
+            race_extention = Extension(**{'url': url, 'valueString': 'Black or African American'})
+        elif race:
+            race_extention = Extension(**{'url': url, 'valueString': 'not reported'})
+        return race_extention
 
     @staticmethod
     def map_vital_status(vital_status: str) -> bool:
@@ -59,7 +115,8 @@ class PatientTransformer:
     @staticmethod
     def filter_related_records():
         """filter records based on CDA human subjects."""
-        human_subject_ids = [subject.id for subject in CDASubject.query.filter(CDASubject.species == 'Homo sapiens').all()]
+        human_subject_ids = [subject.id for subject in
+                             CDASubject.query.filter(CDASubject.species == 'Homo sapiens').all()]
         related_research_subjects = CDAResearchSubject.query.join(
             CDASubjectResearchSubject,
             CDAResearchSubject.id == CDASubjectResearchSubject.researchsubject_id
@@ -85,4 +142,3 @@ class PatientTransformer:
     def _mint_id(self, identifier_string: str) -> str:
         """create a UUID from an identifier, insert project_id."""
         return str(uuid5(self.namespace, f"{self.project_id}/{identifier_string}"))
-
