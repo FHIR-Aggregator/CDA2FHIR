@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from cda2fhir.database import init_db, SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDASubjectResearchSubject, CDAResearchSubject, CDADiagnosis, CDAResearchSubjectDiagnosis, \
-    CDATreatment, CDAResearchSubjectTreatment
+    CDATreatment, CDAResearchSubjectTreatment, CDASubjectAlias
 
 
 def load_json_to_db(json_path, table_class, session, filter_species=None):
@@ -59,6 +59,7 @@ def load_data():
     clear_table(CDAResearchSubjectDiagnosis, session)
     clear_table(CDATreatment, session)
     clear_table(CDAResearchSubjectTreatment, session)
+    clear_table(CDASubjectAlias, session)
     # clear_table(Specimen, session)
     # clear_table(ResearchSubjectSpecimen, session)
 
@@ -81,6 +82,10 @@ def load_data():
         load_tsv_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_treatment.tsv')),
                        CDAResearchSubjectTreatment, session)
+
+        load_tsv_to_db(str(Path(importlib.resources.files(
+            'cda2fhir').parent / 'data' / 'raw' / 'alias_files' / 'subject_integer_aliases.tsv')),
+                       CDASubjectAlias, session)
 
         # load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'specimen.json')), Specimen, session)
         # load_tsv_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' /  'association_tables' / 'researchsubject_specimen.tsv')), ResearchSubjectSpecimen, session)

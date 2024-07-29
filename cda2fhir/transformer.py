@@ -63,7 +63,8 @@ class PatientTransformer:
 
     @staticmethod
     def map_ethnicity(ethnicity: str) -> Extension:
-        url = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race"
+        """map CDA ethnicity content to FHIR patient extension."""
+        url = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity"
         cda_ethnicity = [None, 'not hispanic or latino', 'hispanic or latino',
                          'Not Hispanic or Latino', 'Hispanic or Latino', 'White', 'Asian',
                          'Black', '2', '1', 'C', '102', '01', '96', 'Non-Hispanic Non',
@@ -80,15 +81,21 @@ class PatientTransformer:
                          'anonymized']
 
         ethnicity_extention = None
-        if ethnicity in ['White', 'W', 'WHITE', 'WHT']:
-            ethnicity_extention = Extension(**{'url': url, 'valueString': 'White'})
-        elif ethnicity:
+        if ethnicity in ['not hispanic or latino', 'Not Hispanic or Latino', 'Not Hispanic or', 'Non-Hispanic/Non',
+                         'Non-Hispanic [1]', 'Non-Hispanic', 'Non-Hispanic [9]', 'Not Hispanic Lat']:
+            ethnicity_extention = Extension(**{'url': url, 'valueString': 'not hispanic or latino'})
+        elif ethnicity in ['hispanic or latino', 'Hispanic or Latino', 'Hispanic/Latino', 'Hispanic Latino']:
+            ethnicity_extention = Extension(**{'url': url, 'valueString': 'hispanic or latino'})
+        elif ethnicity in ['anonymous', 'REMOVED', 'Patient Refused', 'Patient Declined', 'anonymized']:
             ethnicity_extention = Extension(**{'url': url, 'valueString': 'not reported'})
+        elif ethnicity:
+            ethnicity_extention = Extension(**{'url': url, 'valueString': 'unknown'}) # Unknown to our team - Has room for content update
         return ethnicity_extention
 
     @staticmethod
     def map_race(race: str) -> Extension:
-        url = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity"
+        """map CDA race content to FHIR patient extension."""
+        url = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race"
         cda_race = [None, 'white', 'black or african american', 'asian',
                     'native hawaiian or other pacific islander',
                     'american indian or alaska native', 'White',
@@ -103,6 +110,12 @@ class PatientTransformer:
             race_extention = Extension(**{'url': url, 'valueString': 'White'})
         elif race in ['black or african american', 'Black or African American']:
             race_extention = Extension(**{'url': url, 'valueString': 'Black or African American'})
+        elif race in ['asian', 'Asian']:
+            race_extention = Extension(**{'url': url, 'valueString': 'Asian'})
+        elif race in ['native hawaiian or other pacific islander', 'Native Hawaiian or other Pacific Islander', 'Native Hawaiian or Other Pacific Islander']:
+            race_extention = Extension(**{'url': url, 'valueString': 'Native Hawaiian or Other Pacific Islander'})
+        elif race in ['american indian or alaska native', 'American Indian or Alaska Native']:
+            race_extention = Extension(**{'url': url, 'valueString': 'American Indian or Alaska Native'})
         elif race:
             race_extention = Extension(**{'url': url, 'valueString': 'not reported'})
         return race_extention

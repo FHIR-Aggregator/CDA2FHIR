@@ -32,6 +32,9 @@ class CDASubject(Base):
     researchsubject_subjects: Mapped[List["CDASubjectResearchSubject"]] = relationship(
         back_populates="subject"
     )
+    subject_alias_relation: Mapped[List["CDASubjectAlias"]] = relationship(
+        back_populates="subject_alias_relations"
+    )
 
 
 class CDAResearchSubject(Base):
@@ -45,7 +48,6 @@ class CDAResearchSubject(Base):
     subject_researchsubjects: Mapped[List["CDASubjectResearchSubject"]] = relationship(
         back_populates="researchsubject"
     )
-
     diagnosis_researchsubjects: Mapped[List["CDAResearchSubjectDiagnosis"]] = relationship(
         back_populates="researchsubject"
     )
@@ -67,6 +69,16 @@ class CDASubjectResearchSubject(Base):
     )
     researchsubject: Mapped["CDAResearchSubject"] = relationship(
         back_populates="subject_researchsubjects"
+    )
+
+
+class CDASubjectAlias(Base):
+    __tablename__ = 'subject_alias_table'
+    query: QueryPropertyDescriptor = Session.query_property()
+    subject_id: Mapped[str] = mapped_column(ForeignKey("subject.id"), primary_key=True)
+    subject_alias: Mapped[int] = mapped_column(Integer, primary_key=True)
+    subject_alias_relations: Mapped["CDASubject"] = relationship(
+        back_populates="subject_alias_relation"
     )
 
 

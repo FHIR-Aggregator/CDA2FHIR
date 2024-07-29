@@ -4,7 +4,7 @@ from pathlib import Path
 import importlib.resources
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
-from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment
+from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, CDASubjectAlias
 from cda2fhir.transformer import PatientTransformer
 
 
@@ -58,6 +58,12 @@ def cda2fhir():
         if save:
             patients = [orjson.loads(patient.json()) for patient in patients]
             fhir_ndjson(patients, str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Patient.ndjson")))
+
+        subject_aliases = session.query(CDASubjectAlias).all()
+        print("==== Subject Alias RELATIONS:")
+        for subject_alias in subject_aliases:
+            print(
+                f"subject_id: {subject_alias.subject_id}, subject_alias: {subject_alias.subject_alias}")
 
     finally:
         print("****** Closing Session ******")
