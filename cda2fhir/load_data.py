@@ -4,7 +4,7 @@ from pathlib import Path
 import importlib.resources
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from cda2fhir.database import SessionLocal
+from cda2fhir.database import init_db, SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDASubjectResearchSubject, CDAResearchSubject, CDADiagnosis, CDAResearchSubjectDiagnosis, \
     CDATreatment, CDAResearchSubjectTreatment
 
@@ -48,6 +48,7 @@ def clear_table(table_class, session: Session):
 
 def load_data():
     """load data into CDA models (call after initialization + change to DB load after CDA transition to DB)"""
+    init_db()
     session = SessionLocal()
 
     # remove after final build

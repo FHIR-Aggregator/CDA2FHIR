@@ -1,6 +1,7 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from .cdamodels import Base
+from cda2fhir.cdamodels import Base
 from pathlib import Path
 import importlib.resources
 
@@ -12,5 +13,8 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db():
-    """initialize database"""
-    Base.metadata.create_all(bind=engine)
+    if not os.path.exists(DATABASE_PATH):
+        print("database does not exist. initializing...")
+        Base.metadata.create_all(bind=engine)
+    else:
+        print("skipping initialization - database exists. ")

@@ -2,7 +2,6 @@ import json
 import orjson
 from pathlib import Path
 import importlib.resources
-from cda2fhir.database import init_db
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment
@@ -19,7 +18,6 @@ def fhir_ndjson(entity, out_path):
 
 
 def cda2fhir():
-    init_db()
     load_data()
 
     session = SessionLocal()
