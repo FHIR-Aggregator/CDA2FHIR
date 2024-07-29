@@ -18,6 +18,9 @@ class PatientTransformer:
         subject_id_system = "".join(["https://cda.readthedocs.io/", "subject_id"])
         subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id)})
 
+        subject_alias_system = "".join(["https://cda.readthedocs.io/", "subject_alias"])
+        subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.alias_id)})
+
         extensions = []
         birthSex = self.map_gender(subject.sex)
         if birthSex:
@@ -33,7 +36,7 @@ class PatientTransformer:
 
         patient = Patient(**{
             "id": self.mint_id(identifier=subject_id_identifier, resource_type="Patient"),
-            "identifier": [subject_id_identifier],
+            "identifier": [subject_id_identifier, subject_alias_identifier],
             "deceasedBoolean": self.map_vital_status(subject.vital_status),
         })
 

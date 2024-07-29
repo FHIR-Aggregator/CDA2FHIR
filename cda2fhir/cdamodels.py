@@ -36,6 +36,11 @@ class CDASubject(Base):
         back_populates="subject_alias_relations"
     )
 
+    @property
+    def alias_id(self):
+        """fetch CDA subject's alias id from subject_alias_relations table - (one to one)"""
+        return self.subject_alias_relation.__getitem__(0).subject_alias
+
 
 class CDAResearchSubject(Base):
     __tablename__ = 'researchsubject'
