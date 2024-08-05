@@ -1,6 +1,8 @@
+import copy
 from fhir.resources.patient import Patient
 from fhir.resources.identifier import Identifier
 from fhir.resources.extension import Extension
+from fhir.resources.observation import Observation
 from sqlalchemy.orm import Session
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject
 from uuid import uuid3, uuid5, NAMESPACE_DNS
@@ -14,12 +16,7 @@ class PatientTransformer:
 
     def subject_to_patient(self, subject: CDASubject) -> Patient:
         """transform CDA Subject to FHIR Patient."""
-        # print(f"Transforming subject: {subject.id}")
-        subject_id_system = "".join(["https://cda.readthedocs.io/", "subject_id"])
-        subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id)})
-
-        subject_alias_system = "".join(["https://cda.readthedocs.io/", "subject_alias"])
-        subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.alias_id)})
+        patient_identifiers = self.patient_identifier(subject)
 
         extensions = []
         birthSex = self.map_gender(subject.sex)
@@ -35,15 +32,29 @@ class PatientTransformer:
             extensions.append(usCoreEthnicity)
 
         patient = Patient(**{
-            "id": self.mint_id(identifier=subject_id_identifier, resource_type="Patient"),
-            "identifier": [subject_id_identifier, subject_alias_identifier],
+            "id": self.patient_mintid(patient_identifiers[0]),
+            "identifier": patient_identifiers,
             "deceasedBoolean": self.map_vital_status(subject.vital_status),
         })
-
+        
         if extensions:
             patient.extension = extensions
 
         return patient
+
+    def patient_identifier(self, subject: CDASubject) -> list[Identifier]:
+        """FHIR patient Identifier from a CDA subject."""
+        subject_id_system = "".join(["https://cda.readthedocs.io/", "subject_id"])
+        subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id)})
+
+        subject_alias_system = "".join(["https://cda.readthedocs.io/", "subject_alias"])
+        subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.alias_id)})
+        return [subject_id_identifier, subject_alias_identifier]
+
+    def patient_mintid(self, patient_identifier: Identifier) -> str:
+        """FHIR patient ID from a CDA subject."""
+        return self.mint_id(identifier=patient_identifier, resource_type="Patient")
+
 
     @staticmethod
     def map_gender(sex: str) -> Extension:
@@ -145,6 +156,39 @@ class PatientTransformer:
         print('**** human_subjects: ', human_subjects.__getitem__(0), len(human_subjects))
         patients = [self.subject_to_patient(subject) for subject in subjects]
         return patients
+
+    def observation_cause_of_death(self, cause_of_death) -> Observation:
+        """observation for official cause of death of CDA patient."""
+        obs = Observation(**{
+            "resourceType": "Observation",
+            "id": "observation-cause-of-death",
+            "status": "final",
+            "category": [
+                {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                            "code": "exam",
+                            "display": "exam"
+                        }
+                    ]
+                }
+            ],
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "79378-6",
+                        "display": "Cause of death"
+                    }
+                ]
+            },
+            "subject": {
+                "reference": f"Patient/example"
+            },
+            "valueString": cause_of_death
+        })
+        return obs
 
     def mint_id(self, identifier: Identifier | str, resource_type: str = None) -> str:
         """create a UUID from an identifier. - mint id via Walsh's convention
