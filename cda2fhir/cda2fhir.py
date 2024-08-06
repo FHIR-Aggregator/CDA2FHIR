@@ -2,10 +2,11 @@ import json
 import orjson
 from pathlib import Path
 import importlib.resources
+from fhir.resources.identifier import Identifier
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
-from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, CDASubjectAlias
-from cda2fhir.transformer import PatientTransformer
+from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, CDASubjectAlias, CDASubjectProject
+from cda2fhir.transformer import PatientTransformer, ResearchStudyTransformer
 
 
 def fhir_ndjson(entity, out_path):
@@ -21,17 +22,21 @@ def cda2fhir():
     load_data()
 
     session = SessionLocal()
-    transformer = PatientTransformer(session)
+    patient_transformer = PatientTransformer(session)
+    research_study_transformer = ResearchStudyTransformer(session)
 
     verbose = False
     save = True
 
     try:
         subjects = session.query(CDASubject).all()
-
         for subject in subjects:
             print(f"id: {subject.id}, species: {subject.species}, sex: {subject.sex}")
-             
+
+            # projects = session.query(CDASubjectProject).filter_by(subject_id=subject.id).all()
+            # for project in projects:
+            #    print(f"@@@@@ Subject's associated  projects: {project.associated_project}")
+
         research_subjects = session.query(CDAResearchSubject).all()
         if verbose:
             print("==== research subjects:")
@@ -58,23 +63,24 @@ def cda2fhir():
             for treatment in treatments:
                 print(f"id: {treatment.id}, therapeutic_agent: {treatment.therapeutic_agent}")
 
-        """try subject to FHIR patient transformation"""
         # print("**** subjects type:", type(subjects[0]))
-        patients = transformer.transform_human_subjects(subjects)
-        if save:
+        patients = patient_transformer.transform_human_subjects(subjects)
+        if save and patients:
             patients = [orjson.loads(patient.json()) for patient in patients]
             fhir_ndjson(patients, str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Patient.ndjson")))
 
         observations = []
         for subject in subjects:
             if subject.cause_of_death:
-                patient_identifiers = transformer.patient_identifier(subject)
-                patient_id = transformer.patient_mintid(patient_identifiers[0])
-                obs = transformer.observation_cause_of_death(subject.cause_of_death)
+                patient_identifiers = patient_transformer.patient_identifier(subject)
+                patient_id = patient_transformer.patient_mintid(patient_identifiers[0])
+                obs = patient_transformer.observation_cause_of_death(subject.cause_of_death)
+                obs_identifier = Identifier(**{'system': "https://cda.readthedocs.io/", 'value': "".join([patient_id, subject.cause_of_death])})
+                obs.id = patient_transformer.mint_id(identifier=obs_identifier, resource_type="Observation")
                 obs.subject = {"reference": f"Patient/{patient_id}"}
                 observations.append(obs)
 
-        if save:
+        if save and observations:
             patient_observations = [orjson.loads(observation.json()) for observation in observations]
             fhir_ndjson(patient_observations, str(Path(
                 importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Observation.ndjson")))
@@ -85,6 +91,18 @@ def cda2fhir():
             for subject_alias in subject_aliases:
                 print(
                     f"subject_id: {subject_alias.subject_id}, subject_alias: {subject_alias.subject_alias}")
+
+        subject_projects = session.query(CDASubjectProject).all()
+        # print(f"found {len(subject_projects)} subject projects")
+        # subjects_with_projects = session.query(CDASubject).join(CDASubjectProject).all()
+
+        research_studies = [research_study_transformer.research_study(project) for project in subject_projects if project.associated_project]
+        research_studies = {rs.id: rs for rs in research_studies if rs}.values() # remove duplicates should be a better way
+
+        if save and research_studies:
+            rs = [orjson.loads(research_study.json()) for research_study in research_studies if research_study]
+            fhir_ndjson(rs, str(Path(
+                importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "ResearchStudy.ndjson")))
 
     finally:
         print("****** Closing Session ******")

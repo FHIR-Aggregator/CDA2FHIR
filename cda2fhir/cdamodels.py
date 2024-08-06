@@ -35,6 +35,10 @@ class CDASubject(Base):
     subject_alias_relation: Mapped[List["CDASubjectAlias"]] = relationship(
         back_populates="subject_alias_relations"
     )
+    subject_project_relation: Mapped[List["CDASubjectProject"]] = relationship(
+        back_populates="subject"
+    )
+
 
     @property
     def alias_id(self):
@@ -84,6 +88,16 @@ class CDASubjectAlias(Base):
     subject_alias: Mapped[int] = mapped_column(Integer, primary_key=True)
     subject_alias_relations: Mapped["CDASubject"] = relationship(
         back_populates="subject_alias_relation"
+    )
+
+
+class CDASubjectProject(Base):
+    __tablename__ = 'subject_project'
+    query: QueryPropertyDescriptor = Session.query_property()
+    subject_id: Mapped[str] = mapped_column(ForeignKey("subject.id"), primary_key=True)
+    associated_project: Mapped[str] = mapped_column(String, primary_key=True)
+    subject: Mapped["CDASubject"] = relationship(
+        back_populates="subject_project_relation"
     )
 
 

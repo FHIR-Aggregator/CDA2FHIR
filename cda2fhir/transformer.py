@@ -3,13 +3,35 @@ from fhir.resources.patient import Patient
 from fhir.resources.identifier import Identifier
 from fhir.resources.extension import Extension
 from fhir.resources.observation import Observation
+from fhir.resources.researchstudy import ResearchStudy
 from sqlalchemy.orm import Session
-from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject
+from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject
 from uuid import uuid3, uuid5, NAMESPACE_DNS
 
 
-class PatientTransformer:
+class Transformer:
     def __init__(self, session: Session):
+        self.session = session
+        self.project_id = 'CDA'
+        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+
+    def mint_id(self, identifier: Identifier | str, resource_type: str = None) -> str:
+        """create a UUID from an identifier. - mint id via Walsh's convention
+        https://github.com/ACED-IDP/g3t_etl/blob/d095895b0cf594c2fd32b400e6f7b4f9384853e2/g3t_etl/__init__.py#L61"""
+        # dispatch on type
+        if isinstance(identifier, Identifier):
+            assert resource_type, "resource_type is required for Identifier"
+            identifier = f"{resource_type}/{identifier.system}|{identifier.value}"
+        return self._mint_id(identifier)
+
+    def _mint_id(self, identifier_string: str) -> str:
+        """create a UUID from an identifier, insert project_id."""
+        return str(uuid5(self.namespace, f"{self.project_id}/{identifier_string}"))
+
+
+class PatientTransformer(Transformer):
+    def __init__(self, session: Session):
+        super().__init__(session)
         self.session = session
         self.project_id = 'CDA'
         self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
@@ -36,7 +58,7 @@ class PatientTransformer:
             "identifier": patient_identifiers,
             "deceasedBoolean": self.map_vital_status(subject.vital_status),
         })
-        
+
         if extensions:
             patient.extension = extensions
 
@@ -54,7 +76,6 @@ class PatientTransformer:
     def patient_mintid(self, patient_identifier: Identifier) -> str:
         """FHIR patient ID from a CDA subject."""
         return self.mint_id(identifier=patient_identifier, resource_type="Patient")
-
 
     @staticmethod
     def map_gender(sex: str) -> Extension:
@@ -103,7 +124,8 @@ class PatientTransformer:
         elif ethnicity in ['anonymous', 'REMOVED', 'Patient Refused', 'Patient Declined', 'anonymized']:
             ethnicity_extention = Extension(**{'url': url, 'valueString': 'not reported'})
         elif ethnicity:
-            ethnicity_extention = Extension(**{'url': url, 'valueString': 'unknown'}) # Unknown to our team - Has room for content update
+            ethnicity_extention = Extension(
+                **{'url': url, 'valueString': 'unknown'})  # Unknown to our team - Has room for content update
         return ethnicity_extention
 
     @staticmethod
@@ -126,7 +148,8 @@ class PatientTransformer:
             race_extention = Extension(**{'url': url, 'valueString': 'Black or African American'})
         elif race in ['asian', 'Asian']:
             race_extention = Extension(**{'url': url, 'valueString': 'Asian'})
-        elif race in ['native hawaiian or other pacific islander', 'Native Hawaiian or other Pacific Islander', 'Native Hawaiian or Other Pacific Islander']:
+        elif race in ['native hawaiian or other pacific islander', 'Native Hawaiian or other Pacific Islander',
+                      'Native Hawaiian or Other Pacific Islander']:
             race_extention = Extension(**{'url': url, 'valueString': 'Native Hawaiian or Other Pacific Islander'})
         elif race in ['american indian or alaska native', 'American Indian or Alaska Native']:
             race_extention = Extension(**{'url': url, 'valueString': 'American Indian or Alaska Native'})
@@ -190,15 +213,38 @@ class PatientTransformer:
         })
         return obs
 
-    def mint_id(self, identifier: Identifier | str, resource_type: str = None) -> str:
-        """create a UUID from an identifier. - mint id via Walsh's convention
-        https://github.com/ACED-IDP/g3t_etl/blob/d095895b0cf594c2fd32b400e6f7b4f9384853e2/g3t_etl/__init__.py#L61"""
-        # dispatch on type
-        if isinstance(identifier, Identifier):
-            assert resource_type, "resource_type is required for Identifier"
-            identifier = f"{resource_type}/{identifier.system}|{identifier.value}"
-        return self._mint_id(identifier)
 
-    def _mint_id(self, identifier_string: str) -> str:
-        """create a UUID from an identifier, insert project_id."""
-        return str(uuid5(self.namespace, f"{self.project_id}/{identifier_string}"))
+class ResearchStudyTransformer(Transformer):
+    def __init__(self, session: Session):
+        super().__init__(session)
+        self.session = session
+        self.project_id = 'CDA'
+        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+
+    def research_study(self, project: CDASubjectProject) -> ResearchStudy:
+        """CDA Projects to FHIR ResearchStudy."""
+        if project.associated_project:
+            #print(f"associated project: {project.associated_project}")
+            rs_identifier = self.research_study_identifier(project)
+            rs_id = self.research_study_mintid(rs_identifier[0])
+            research_study = ResearchStudy(
+                **{
+                    'id': rs_id,
+                    'identifier': rs_identifier,
+                    'status': 'active',
+                    'name': project.associated_project
+                }
+            )
+            return research_study
+
+    @staticmethod
+    def research_study_identifier(project: CDASubjectProject) -> list[Identifier]:
+        """CDA project FHIR Identifier."""
+        project_id_system = "".join(["https://cda.readthedocs.io/", "associated_project"])
+        project_id_identifier = Identifier(**{'system': project_id_system, 'value': str(project.associated_project)})
+
+        return [project_id_identifier]
+
+    def research_study_mintid(self, rs_identifier: Identifier) -> str:
+        """CDA project FHIR Mint ID."""
+        return self.mint_id(identifier=rs_identifier, resource_type="ResearchStudy")
