@@ -19,8 +19,8 @@ def load_json_to_db(json_path, table_class, session, filter_species=None):
         data = json.load(f)
         filter_species = {'Human', 'Homo sapiens'}
         for line in data:
-            # allow for upstream filtering
-            if filter_species and line.get("species") not in filter_species:
+            # allow for upstream filtering - only for subject with species in key
+            if 'species' in line.keys() and filter_species and line.get("species") not in filter_species:
                 continue
             try:
                 session.add(table_class(**line))

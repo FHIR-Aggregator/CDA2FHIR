@@ -63,9 +63,6 @@ class CDAResearchSubject(Base):
     treatment_researchsubjects: Mapped[List["CDAResearchSubjectTreatment"]] = relationship(
         back_populates="researchsubject"
     )
-    # specimen_researchsubjects: Mapped[List["CDAResearchSubjectSpecimen"]] = relationship(
-    #    back_populates="researchsubject"
-    # )
 
 
 class CDASubjectResearchSubject(Base):

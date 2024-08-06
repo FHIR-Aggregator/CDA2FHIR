@@ -1,3 +1,4 @@
+import re
 import copy
 from typing import Optional
 from fhir.resources.patient import Patient
@@ -236,9 +237,7 @@ class ResearchStudyTransformer(Transformer):
         self.project_id = 'CDA'
         self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
 
-    # def research_study(self, project: CDASubjectProject, research_subject: CDAResearchSubject) -> ResearchStudy:
-    def research_study(self, project: CDASubjectProject) -> ResearchStudy:
-
+    def research_study(self, project: CDASubjectProject, research_subject: CDAResearchSubject) -> ResearchStudy:
         """CDA Projects to FHIR ResearchStudy."""
         if project.associated_project:
             # print(f"associated project: {project.associated_project}")
@@ -246,13 +245,13 @@ class ResearchStudyTransformer(Transformer):
             rs_id = self.research_study_mintid(rs_identifier[0])
 
             condition = []
-            """
-            if research_subject.primary_diagnosis_condition:
+
+            if research_subject.primary_diagnosis_condition and re.match("^[^\s]+(\s[^\s]+)*$", research_subject.primary_diagnosis_condition):
                 condition = [CodeableConcept(**{'coding': [{
                     'code': research_subject.primary_diagnosis_condition,
-                    'value': research_subject.primary_diagnosis_condition,
+                    'display': research_subject.primary_diagnosis_condition,
                     'system': 'https://cda.readthedocs.io/'}]})]
-            """
+
             research_study = ResearchStudy(
                 **{
                     'id': rs_id,
