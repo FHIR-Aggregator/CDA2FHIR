@@ -74,32 +74,23 @@ def load_data():
 
     try:
         # if not table_exists(engine, 'subject'): #TODO: add when relations and tables are defined
-        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'subject.json')), CDASubject,
-                        session)
-
-        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'researchsubject.json')),
-                        CDAResearchSubject, session)
-        load_tsv_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_researchsubject.tsv')),
-                       CDASubjectResearchSubject, session)
-
-        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'diagnosis.json')), CDADiagnosis,
-                        session)
-        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'treatment.json')), CDATreatment,
-                        session)
-        load_tsv_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_diagnosis.tsv')),
-                       CDAResearchSubjectDiagnosis, session)
-        load_tsv_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_treatment.tsv')),
-                       CDAResearchSubjectTreatment, session)
-
-        load_tsv_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'alias_files' / 'subject_integer_aliases.tsv')),
-                       CDASubjectAlias, session)
-        load_tsv_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_associated_project.tsv')),
-                       CDASubjectProject, session)
+        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'subject.json')), CDASubject, session)
+        # if not table_exists(engine, 'researchsubject'):
+        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'researchsubject.json')), CDAResearchSubject, session)
+        # if not table_exists(engine, 'subject_researchsubject'):
+        load_tsv_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_researchsubject.tsv')), CDASubjectResearchSubject, session)
+        # if not table_exists(engine, 'diagnosis'):
+        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'diagnosis.json')), CDADiagnosis, session)
+        # if not table_exists(engine, 'treatment'):
+        load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'treatment.json')), CDATreatment, session)
+        # if not table_exists(engine, 'researchsubject_diagnosis'):
+        load_tsv_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_diagnosis.tsv')), CDAResearchSubjectDiagnosis, session)
+        # if not table_exists(engine, 'researchsubject_treatment'):
+        load_tsv_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_treatment.tsv')), CDAResearchSubjectTreatment, session)
+        # if not table_exists(engine, 'subject_alias_table'):
+        load_tsv_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'alias_files' / 'subject_integer_aliases.tsv')), CDASubjectAlias, session)
+        # if not table_exists(engine, 'subject_project'):
+        load_tsv_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_associated_project.tsv')), CDASubjectProject, session)
 
         # load_json_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'specimen.json')), Specimen, session)
         # load_tsv_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' /  'association_tables' / 'researchsubject_specimen.tsv')), ResearchSubjectSpecimen, session)

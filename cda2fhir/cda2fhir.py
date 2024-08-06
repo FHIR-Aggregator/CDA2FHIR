@@ -6,7 +6,8 @@ from fhir.resources.identifier import Identifier
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, CDASubjectAlias, CDASubjectProject
-from cda2fhir.transformer import PatientTransformer, ResearchStudyTransformer
+from cda2fhir.transformer import Transformer, PatientTransformer, ResearchStudyTransformer
+from sqlalchemy import select
 
 
 def fhir_ndjson(entity, out_path):
@@ -97,9 +98,9 @@ def cda2fhir():
         # subjects_with_projects = session.query(CDASubject).join(CDASubjectProject).all()
 
         research_studies = [research_study_transformer.research_study(project) for project in subject_projects if project.associated_project]
-        research_studies = {rs.id: rs for rs in research_studies if rs}.values() # remove duplicates should be a better way
 
         if save and research_studies:
+            research_studies = {rs.id: rs for rs in research_studies if rs}.values() # remove duplicates should be a better way
             rs = [orjson.loads(research_study.json()) for research_study in research_studies if research_study]
             fhir_ndjson(rs, str(Path(
                 importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "ResearchStudy.ndjson")))

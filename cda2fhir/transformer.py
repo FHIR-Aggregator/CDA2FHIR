@@ -1,9 +1,11 @@
 import copy
+from typing import Optional
 from fhir.resources.patient import Patient
 from fhir.resources.identifier import Identifier
 from fhir.resources.extension import Extension
 from fhir.resources.observation import Observation
 from fhir.resources.researchstudy import ResearchStudy
+from fhir.resources.codeableconcept import CodeableConcept
 from sqlalchemy.orm import Session
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject
 from uuid import uuid3, uuid5, NAMESPACE_DNS
@@ -27,6 +29,19 @@ class Transformer:
     def _mint_id(self, identifier_string: str) -> str:
         """create a UUID from an identifier, insert project_id."""
         return str(uuid5(self.namespace, f"{self.project_id}/{identifier_string}"))
+
+    def subject_id_to_research_subject(self, subject_id: str) -> CDAResearchSubject:
+        research_subject = (
+            self.session.query(CDAResearchSubject)
+            .join(CDASubjectResearchSubject, CDAResearchSubject.id == CDASubjectResearchSubject.researchsubject_id)
+            .filter(CDASubjectResearchSubject.subject_id == subject_id)
+            .first()
+        )
+
+        if not research_subject:
+            raise ValueError(f"research subject wasn't found for subject: {subject_id}")
+
+        return research_subject
 
 
 class PatientTransformer(Transformer):
@@ -221,18 +236,30 @@ class ResearchStudyTransformer(Transformer):
         self.project_id = 'CDA'
         self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
 
+    # def research_study(self, project: CDASubjectProject, research_subject: CDAResearchSubject) -> ResearchStudy:
     def research_study(self, project: CDASubjectProject) -> ResearchStudy:
+
         """CDA Projects to FHIR ResearchStudy."""
         if project.associated_project:
-            #print(f"associated project: {project.associated_project}")
+            # print(f"associated project: {project.associated_project}")
             rs_identifier = self.research_study_identifier(project)
             rs_id = self.research_study_mintid(rs_identifier[0])
+
+            condition = []
+            """
+            if research_subject.primary_diagnosis_condition:
+                condition = [CodeableConcept(**{'coding': [{
+                    'code': research_subject.primary_diagnosis_condition,
+                    'value': research_subject.primary_diagnosis_condition,
+                    'system': 'https://cda.readthedocs.io/'}]})]
+            """
             research_study = ResearchStudy(
                 **{
                     'id': rs_id,
                     'identifier': rs_identifier,
                     'status': 'active',
-                    'name': project.associated_project
+                    'name': project.associated_project,
+                    'condition': condition
                 }
             )
             return research_study
@@ -248,3 +275,4 @@ class ResearchStudyTransformer(Transformer):
     def research_study_mintid(self, rs_identifier: Identifier) -> str:
         """CDA project FHIR Mint ID."""
         return self.mint_id(identifier=rs_identifier, resource_type="ResearchStudy")
+
