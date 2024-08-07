@@ -103,20 +103,17 @@ def cda2fhir():
         research_studies = []
         for project in subject_projects:
             if project.associated_project:
-                # https://stackoverflow.com/questions/59849952/sqlalchemy-get-data-from-relationship 
-                rs_subject_relation = (session.query(CDASubjectResearchSubject)
-                                       .filter(CDASubjectResearchSubject.subject_id == project.subject_id)
-                                       .all())
-                # print(f"@@@@@@@@ rs_subject_relation RESULT for subject {project.subject_id} is :", rs_subject_relation)
-                for rs_relation in rs_subject_relation:
-                    if rs_relation.researchsubject_id:
-                        rs = (session.query(CDAResearchSubject)
-                              .filter(CDAResearchSubject.id == rs_relation.researchsubject_id)
-                              .first())
-                        research_study = research_study_transformer.research_study(project, rs)
-                        if research_study:
-                            research_studies.append(research_study)
-                        # print(f"@@@@@@@@ research_study RESULT for research_subject {rs_relation.researchsubject_id} is with length:", len(result2), 'and has primary diagnosis: ', result2[0].primary_diagnosis_condition)
+                research_subjects = (
+                    session.query(CDAResearchSubject)
+                    .join(CDASubjectResearchSubject)
+                    .filter(CDASubjectResearchSubject.subject_id == project.subject_id)
+                    .all()
+                )
+
+                for rs in research_subjects:
+                    research_study = research_study_transformer.research_study(project, rs)
+                    if research_study:
+                        research_studies.append(research_study)
 
         if save and research_studies:
             research_studies = {rs.id: rs for rs in research_studies if
