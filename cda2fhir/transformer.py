@@ -6,6 +6,7 @@ from fhir.resources.identifier import Identifier
 from fhir.resources.extension import Extension
 from fhir.resources.observation import Observation
 from fhir.resources.researchstudy import ResearchStudy
+from fhir.resources.researchsubject import ResearchSubject
 from fhir.resources.codeableconcept import CodeableConcept
 from sqlalchemy.orm import Session
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject
@@ -191,8 +192,8 @@ class PatientTransformer(Transformer):
 
     def transform_human_subjects(self, subjects: list[CDASubject]) -> list[Patient]:
         """transform human CDA Subjects to FHIR Patients."""
-        human_subjects = [subject.query.filter(subject.species == 'Homo sapiens') for subject in subjects]
-        print('**** human_subjects: ', human_subjects.__getitem__(0), len(human_subjects))
+        # human_subjects = [subject.query.filter(subject.species == 'Homo sapiens') for subject in subjects] # filtered in load
+        # print('**** human_subjects: ', human_subjects.__getitem__(0), len(human_subjects))
         patients = [self.subject_to_patient(subject) for subject in subjects]
         return patients
 
@@ -246,7 +247,8 @@ class ResearchStudyTransformer(Transformer):
 
             condition = []
 
-            if research_subject.primary_diagnosis_condition and re.match("^[^\s]+(\s[^\s]+)*$", research_subject.primary_diagnosis_condition):
+            if research_subject.primary_diagnosis_condition and re.match("^[^\s]+(\s[^\s]+)*$",
+                                                                         research_subject.primary_diagnosis_condition):
                 condition = [CodeableConcept(**{'coding': [{
                     'code': research_subject.primary_diagnosis_condition,
                     'display': research_subject.primary_diagnosis_condition,
@@ -274,4 +276,45 @@ class ResearchStudyTransformer(Transformer):
     def research_study_mintid(self, rs_identifier: Identifier) -> str:
         """CDA project FHIR Mint ID."""
         return self.mint_id(identifier=rs_identifier, resource_type="ResearchStudy")
+
+
+class ResearchSubjectTransformer(Transformer):
+    def __init__(self, session: Session):
+        super().__init__(session)
+        self.session = session
+        self.project_id = 'CDA'
+        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+
+    def research_subject(self, cda_research_subject: CDAResearchSubject, patient: PatientTransformer,
+                         research_study: ResearchStudyTransformer) -> ResearchSubject:
+
+        rs_identifier = self.research_subject_identifier(cda_research_subject)
+        _id = self.research_subject_mintid(rs_identifier[0])
+
+        research_subject = ResearchSubject(
+            **{
+                "id": _id,
+                "identifier": rs_identifier,
+                "status": "active",
+                "subject": {
+                    "reference": f"Patient/{patient.id}"
+                },
+                "study":{
+                  "reference": f"ResearchStudy/{research_study.id}"
+                }
+            })
+
+        return research_subject
+
+    @staticmethod
+    def research_subject_identifier(cda_research_subject: CDAResearchSubject) -> list[Identifier]:
+        """CDA research subject FHIR Identifier."""
+        research_subject_id_system = "".join(["https://cda.readthedocs.io/", "researchsubject"])
+        research_subject_id_identifier = Identifier(**{'system': research_subject_id_system, 'value': cda_research_subject.id})
+
+        return [research_subject_id_identifier]
+
+    def research_subject_mintid(self, rs_identifier: Identifier) -> str:
+        """CDA research subject FHIR Mint ID."""
+        return self.mint_id(identifier=rs_identifier, resource_type="ResearchSubject")
 
