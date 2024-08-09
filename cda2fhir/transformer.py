@@ -8,8 +8,10 @@ from fhir.resources.observation import Observation
 from fhir.resources.researchstudy import ResearchStudy
 from fhir.resources.researchsubject import ResearchSubject
 from fhir.resources.codeableconcept import CodeableConcept
+from fhir.resources.condition import Condition, ConditionStage
 from sqlalchemy.orm import Session
-from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject
+from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject, \
+    CDADiagnosis
 from uuid import uuid3, uuid5, NAMESPACE_DNS
 
 
@@ -287,7 +289,6 @@ class ResearchSubjectTransformer(Transformer):
 
     def research_subject(self, cda_research_subject: CDAResearchSubject, patient: PatientTransformer,
                          research_study: ResearchStudyTransformer) -> ResearchSubject:
-
         rs_identifier = self.research_subject_identifier(cda_research_subject)
         _id = self.research_subject_mintid(rs_identifier[0])
 
@@ -299,8 +300,8 @@ class ResearchSubjectTransformer(Transformer):
                 "subject": {
                     "reference": f"Patient/{patient.id}"
                 },
-                "study":{
-                  "reference": f"ResearchStudy/{research_study.id}"
+                "study": {
+                    "reference": f"ResearchStudy/{research_study.id}"
                 }
             })
 
@@ -310,7 +311,8 @@ class ResearchSubjectTransformer(Transformer):
     def research_subject_identifier(cda_research_subject: CDAResearchSubject) -> list[Identifier]:
         """CDA research subject FHIR Identifier."""
         research_subject_id_system = "".join(["https://cda.readthedocs.io/", "researchsubject"])
-        research_subject_id_identifier = Identifier(**{'system': research_subject_id_system, 'value': cda_research_subject.id})
+        research_subject_id_identifier = Identifier(
+            **{'system': research_subject_id_system, 'value': cda_research_subject.id})
 
         return [research_subject_id_identifier]
 
@@ -318,3 +320,121 @@ class ResearchSubjectTransformer(Transformer):
         """CDA research subject FHIR Mint ID."""
         return self.mint_id(identifier=rs_identifier, resource_type="ResearchSubject")
 
+
+class ConditionTransformer(Transformer):
+    def __init__(self, session: Session):
+        super().__init__(session)
+        self.session = session
+        self.project_id = 'CDA'
+        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+
+    def condition(self, diagnosis: CDADiagnosis, patient: PatientTransformer) -> Condition:
+
+        condition_identifier = self.condition_identifier(diagnosis)
+        condition_id = self.condition_mintid(condition_identifier[0])
+
+        _stage_display = None
+        if diagnosis.stage:
+            _stage_display = diagnosis.stage
+        elif diagnosis.grade:
+            _stage_display = diagnosis.grade
+
+        stage_summary = None
+        if _stage_display:
+            stage_summary = CodeableConcept(**{
+                "coding": [
+                    {
+                        "system": "https://cda.readthedocs.io/",
+                        "code": _stage_display,
+                        "display": _stage_display
+                    }
+                ]
+            })
+
+        _condition_observation = self.condition_observation(diagnosis, _stage_display, patient)
+
+        _condition = Condition(
+            **{
+                "id": condition_id,
+                "identifier": condition_identifier,
+                "clinicalStatus": "active",
+                "code": CodeableConcept(
+                    **{
+                        "coding": [{"system": "https://cda.readthedocs.io/",
+                                    "code": diagnosis.primary_diagnosis,
+                                    "display": diagnosis.primary_diagnosis}]}
+                ),
+                "onsetAge": diagnosis.age_at_diagnosis,
+                "stage": [ConditionStage(
+                    **{
+                        "summary": stage_summary,
+                        "assessment": [
+                            {
+                                "reference": _condition_observation.id
+                            }
+                        ]
+                    }
+                )]
+            }
+        )
+        return _condition
+
+    def condition_observation(self, diagnosis, display, patient) -> Observation:
+
+        observation_code = None
+        if diagnosis.stage:
+            observation_code = {
+                "system": "https://thesaurus.cancer.gov",
+                "code": "C177556",
+                "display": "AJCC v8 Pathologic Stage"
+            }
+        elif diagnosis.grade:
+            observation_code = {
+                "system": "http://loinc.org",
+                "code": "33732-9",
+                "display": "Histology grade [Identifier] in Cancer specimen"
+            }
+
+        observation = Observation(
+            **{
+                "id": "",
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "laboratory",
+                                "display": "Laboratory"
+                            }
+                        ]
+                    }
+                ],
+                "code": {
+                    "coding": [observation_code]
+                },
+                "subject": {
+                    "reference": f"Patient/{patient.id}"
+                },
+                "valueCodeableConcept": {
+                    "coding": [{
+                        "system": "https://cda.readthedocs.io/",
+                        "code": display,
+                        "display": display
+                    }
+                    ]
+                }
+            }
+        )
+        return observation
+
+    @staticmethod
+    def condition_identifier(cda_diagnosis: CDADiagnosis) -> list[Identifier]:
+        """CDA Diagnosis Condition FHIR Identifier."""
+        condition_id_system = "".join(["https://cda.readthedocs.io/", "diagnosis"])
+        condition_identifier = Identifier(**{'system': condition_id_system, 'value': cda_diagnosis.id})
+        return [condition_identifier]
+
+    def condition_mintid(self, condition_identifier: Identifier) -> str:
+        """CDA Diagnosis Condition FHIR Mint ID."""
+        return self.mint_id(identifier=condition_identifier, resource_type="Condition")
