@@ -6,9 +6,10 @@ from fhir.resources.identifier import Identifier
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, \
-    CDASubjectAlias, CDASubjectProject
-from cda2fhir.transformer import Transformer, PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer
-from sqlalchemy import select
+    CDASubjectAlias, CDASubjectProject, CDAResearchSubjectDiagnosis
+from cda2fhir.transformer import Transformer, PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer, \
+    ConditionTransformer
+from sqlalchemy import select, func
 
 
 def fhir_ndjson(entity, out_path):
@@ -27,6 +28,7 @@ def cda2fhir():
     patient_transformer = PatientTransformer(session)
     research_study_transformer = ResearchStudyTransformer(session)
     research_subject_transformer = ResearchSubjectTransformer(session)
+    condition_transformer = ConditionTransformer(session)
 
 
     verbose = False
@@ -34,8 +36,9 @@ def cda2fhir():
 
     try:
         subjects = session.query(CDASubject).all()
-        for subject in subjects:
-            print(f"id: {subject.id}, species: {subject.species}, sex: {subject.sex}")
+        if verbose:
+            for subject in subjects:
+                print(f"id: {subject.id}, species: {subject.species}, sex: {subject.sex}")
 
             # projects = session.query(CDASubjectProject).filter_by(subject_id=subject.id).all()
             # for project in projects:
@@ -55,11 +58,11 @@ def cda2fhir():
                 print(
                     f"researchsubject_id: {subject_researchsubject.researchsubject_id}, subject_id: {subject_researchsubject.subject_id}")
 
-        diagnoses = session.query(CDADiagnosis).all()
-        if verbose:
-            print("**** diagnosis:")
-            for diagnosis in diagnoses:
-                print(f"id: {diagnosis.id}, primary_diagnosis: {diagnosis.primary_diagnosis}")
+        # diagnoses = session.query(CDADiagnosis).all()
+        # if verbose:
+        #    print("**** diagnosis:")
+        #    for diagnosis in diagnoses:
+        #        print(f"id: {diagnosis.id}, primary_diagnosis: {diagnosis.primary_diagnosis}")
 
         treatments = session.query(CDATreatment).all()
         if verbose:
@@ -85,11 +88,6 @@ def cda2fhir():
                 obs.id = patient_transformer.mint_id(identifier=obs_identifier, resource_type="Observation")
                 obs.subject = {"reference": f"Patient/{patient_id}"}
                 observations.append(obs)
-
-        if save and observations:
-            patient_observations = [orjson.loads(observation.json()) for observation in observations]
-            fhir_ndjson(patient_observations, str(Path(
-                importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Observation.ndjson")))
 
         subject_aliases = session.query(CDASubjectAlias).all()
         if verbose:
@@ -141,6 +139,57 @@ def cda2fhir():
             fhir_rsubjects = [orjson.loads(cdarsubject.json()) for cdarsubject in research_subjects if cdarsubject]
             fhir_ndjson(fhir_rsubjects, str(Path(
                 importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "ResearchSubject.ndjson")))
+
+        # randomly choose N diagnosis to reduce runtime for development
+        # takes ~ 2hrs for 1041360+ diagnosis records
+        n = 100  # reduce size
+        for _ in range(n):
+            reduced_diagnoses = session.execute(
+                select(CDADiagnosis)
+                .order_by(func.random()) # randomly select
+                .limit(n)
+            ).scalars().all()
+
+        conditions = []
+        for diagnosis in reduced_diagnoses:
+            _subject_diagnosis = (
+                session.query(CDASubject)
+                .join(CDASubjectResearchSubject, CDASubject.id == CDASubjectResearchSubject.subject_id)
+                .join(CDAResearchSubject, CDASubjectResearchSubject.researchsubject_id == CDAResearchSubject.id)
+                .join(CDAResearchSubjectDiagnosis, CDAResearchSubject.id == CDAResearchSubjectDiagnosis.researchsubject_id)
+                .filter(CDAResearchSubjectDiagnosis.diagnosis_id == diagnosis.id)
+                .all()
+            )
+
+            if _subject_diagnosis:
+                _patient_diagnosis = patient_transformer.transform_human_subjects(_subject_diagnosis)
+                if _patient_diagnosis and _patient_diagnosis[0].id:
+                    print(f"------- patient id for diagnosis ID {diagnosis.id} is : {_patient_diagnosis[0].id}")
+                    condition = condition_transformer.condition(diagnosis, _patient_diagnosis[0])
+                    if condition:
+                        conditions.append(condition)
+
+                        # condition stage observation
+                        if condition.stage:
+                            stage = condition.stage[0]
+                            if stage.assessment and stage.summary:
+                                _display = stage.summary.coding[0].display
+                                if _display:
+                                    observation = condition_transformer.condition_observation(diagnosis, _display, _patient_diagnosis[0], condition.id)
+                                    if observation:
+                                        observations.append(observation)
+
+        if save and conditions:
+            _conditions = {_condition.id: _condition for _condition in conditions if _condition}.values()
+            fhir_conditions = [orjson.loads(c.json()) for c in _conditions if c]
+            fhir_ndjson(fhir_conditions, str(Path(
+                importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Condition.ndjson")))
+
+        if save and observations:
+            observations = {_obs.id: _obs for _obs in observations if _obs}.values()
+            patient_observations = [orjson.loads(observation.json()) for observation in observations]
+            fhir_ndjson(patient_observations, str(Path(
+                importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Observation.ndjson")))
 
     finally:
         print("****** Closing Session ******")

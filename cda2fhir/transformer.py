@@ -249,7 +249,7 @@ class ResearchStudyTransformer(Transformer):
 
             condition = []
 
-            if research_subject.primary_diagnosis_condition and re.match("^[^\s]+(\s[^\s]+)*$",
+            if research_subject.primary_diagnosis_condition and re.match(r"^[^\s]+(\s[^\s]+)*$",
                                                                          research_subject.primary_diagnosis_condition):
                 condition = [CodeableConcept(**{'coding': [{
                     'code': research_subject.primary_diagnosis_condition,
@@ -329,6 +329,9 @@ class ConditionTransformer(Transformer):
         self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
 
     def condition(self, diagnosis: CDADiagnosis, patient: PatientTransformer) -> Condition:
+        if diagnosis.primary_diagnosis is None or not re.match(r"^[^\s]+(\s[^\s]+)*$", diagnosis.primary_diagnosis):
+            print(f"---- SKIPPING DIAGNOSIS {diagnosis.id} due to missing or invalid primary diagnosis string per fhir standards.")
+            return None
 
         condition_identifier = self.condition_identifier(diagnosis)
         condition_id = self.condition_mintid(condition_identifier[0])
@@ -351,35 +354,70 @@ class ConditionTransformer(Transformer):
                 ]
             })
 
-        _condition_observation = self.condition_observation(diagnosis, _stage_display, patient)
+        onset = None
+        if diagnosis.age_at_diagnosis:
+            onset = str(diagnosis.age_at_diagnosis)
+
+        if _stage_display:
+            _condition_observation = self.condition_observation(diagnosis, _stage_display, patient, condition_id)
+
+        stage = []
+        if stage_summary and _condition_observation:
+            stage = [ConditionStage(
+                **{
+                    "summary": stage_summary,
+                    "assessment": [
+                        {
+                            "reference": f"Observation/{_condition_observation.id}"
+                        }
+                    ]
+                }
+            )]
+
+        code = None
+        display = None
+        if ":" in diagnosis.primary_diagnosis:
+            code, display = diagnosis.primary_diagnosis.split(':', 1)
+            code = code.strip()
+            display = display.strip()
+        else:
+            code = diagnosis.primary_diagnosis
+            display = diagnosis.primary_diagnosis
 
         _condition = Condition(
             **{
                 "id": condition_id,
                 "identifier": condition_identifier,
-                "clinicalStatus": "active",
-                "code": CodeableConcept(
+                "subject": {
+                    "reference": f"Patient/{patient.id}"
+                },
+                "clinicalStatus": CodeableConcept(
                     **{
-                        "coding": [{"system": "https://cda.readthedocs.io/",
-                                    "code": diagnosis.primary_diagnosis,
-                                    "display": diagnosis.primary_diagnosis}]}
-                ),
-                "onsetAge": diagnosis.age_at_diagnosis,
-                "stage": [ConditionStage(
-                    **{
-                        "summary": stage_summary,
-                        "assessment": [
+                        "coding": [
                             {
-                                "reference": _condition_observation.id
+                                "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                                "code": "active",
+                                "display": "Active"
                             }
                         ]
                     }
-                )]
+                ),
+                "code": CodeableConcept(
+                    **{
+                        "coding": [{"system": "https://cda.readthedocs.io/",
+                                    "code": code,
+                                    "display": display}]}
+                ),
+                "onsetString": onset,
+                "stage": stage
             }
         )
         return _condition
 
-    def condition_observation(self, diagnosis, display, patient) -> Observation:
+    def condition_observation(self, diagnosis, display, patient, _condition_id) -> Observation:
+        condition_id_system = "".join(["https://cda.readthedocs.io/", "diagnosis"])
+        observation_identifier = Identifier(**{'system': condition_id_system, 'value': diagnosis.id})
+        observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
 
         observation_code = None
         if diagnosis.stage:
@@ -394,10 +432,13 @@ class ConditionTransformer(Transformer):
                 "code": "33732-9",
                 "display": "Histology grade [Identifier] in Cancer specimen"
             }
+        if observation_code is None:
+            print(f"Skipping Observation for diagnosis condition {diagnosis.id}")
+            return None
 
         observation = Observation(
             **{
-                "id": "",
+                "id": observation_id,
                 "status": "final",
                 "category": [
                     {
@@ -416,6 +457,9 @@ class ConditionTransformer(Transformer):
                 "subject": {
                     "reference": f"Patient/{patient.id}"
                 },
+                "focus": [{
+                    "reference": f"Condition/{_condition_id}"
+                }],
                 "valueCodeableConcept": {
                     "coding": [{
                         "system": "https://cda.readthedocs.io/",
