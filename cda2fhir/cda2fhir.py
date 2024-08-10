@@ -58,7 +58,7 @@ def cda2fhir():
                 print(
                     f"researchsubject_id: {subject_researchsubject.researchsubject_id}, subject_id: {subject_researchsubject.subject_id}")
 
-        # diagnoses = session.query(CDADiagnosis).all()
+        diagnoses = session.query(CDADiagnosis).all()
         # if verbose:
         #    print("**** diagnosis:")
         #    for diagnosis in diagnoses:
@@ -142,16 +142,16 @@ def cda2fhir():
 
         # randomly choose N diagnosis to reduce runtime for development
         # takes ~ 2hrs for 1041360+ diagnosis records
-        n = 100  # reduce size
-        for _ in range(n):
-            reduced_diagnoses = session.execute(
-                select(CDADiagnosis)
-                .order_by(func.random()) # randomly select
-                .limit(n)
-            ).scalars().all()
+        # n = 100  # reduce size
+        # for _ in range(n):
+        #    reduced_diagnoses = session.execute(
+        #        select(CDADiagnosis)
+        #        .order_by(func.random()) # randomly select
+        #        .limit(n)
+        #    ).scalars().all()
 
         conditions = []
-        for diagnosis in reduced_diagnoses:
+        for diagnosis in diagnoses:
             _subject_diagnosis = (
                 session.query(CDASubject)
                 .join(CDASubjectResearchSubject, CDASubject.id == CDASubjectResearchSubject.subject_id)
