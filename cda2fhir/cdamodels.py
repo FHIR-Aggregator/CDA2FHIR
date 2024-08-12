@@ -60,6 +60,9 @@ class CDAResearchSubject(Base):
     diagnosis_researchsubjects: Mapped[List["CDAResearchSubjectDiagnosis"]] = relationship(
         back_populates="researchsubject"
     )
+    specimen_researchsubjects: Mapped[List["CDAResearchSubjectSpecimen"]] = relationship(
+        back_populates="researchsubject"
+    )
     treatment_researchsubjects: Mapped[List["CDAResearchSubjectTreatment"]] = relationship(
         back_populates="researchsubject"
     )
@@ -159,8 +162,6 @@ class CDAResearchSubjectTreatment(Base):
     )
 
 
-# TODO: issues loading specimen - look into associated_project field & data.
-"""
 class CDASpecimen(Base):
     __tablename__ = 'specimen'
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -180,12 +181,12 @@ class CDASpecimen(Base):
 
 class CDAResearchSubjectSpecimen(Base):
     __tablename__ = 'researchsubject_specimen'
+    query: QueryPropertyDescriptor = Session.query_property()
     researchsubject_id: Mapped[str] = mapped_column(ForeignKey('researchsubject.id'), primary_key=True)
     specimen_id: Mapped[str] = mapped_column(ForeignKey('specimen.id'), primary_key=True)
-    researchsubject: Mapped["CDAResearchSubject"] = relationship(
-        back_populates="specimen_researchsubjects"
-    )
     specimen: Mapped["CDASpecimen"] = relationship(
         back_populates="researchsubject_specimens"
     )
-"""
+    researchsubject: Mapped["CDAResearchSubject"] = relationship(
+        back_populates="specimen_researchsubjects"
+    )
