@@ -8,7 +8,7 @@ from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, \
     CDASubjectAlias, CDASubjectProject, CDAResearchSubjectDiagnosis, CDASpecimen
 from cda2fhir.transformer import Transformer, PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer, \
-    ConditionTransformer
+    ConditionTransformer, SpecimenTransformer
 from sqlalchemy import select, func
 
 
@@ -29,7 +29,7 @@ def cda2fhir():
     research_study_transformer = ResearchStudyTransformer(session)
     research_subject_transformer = ResearchSubjectTransformer(session)
     condition_transformer = ConditionTransformer(session)
-
+    specimen_transformer = SpecimenTransformer(session)
 
     verbose = True
     save = True
@@ -45,11 +45,59 @@ def cda2fhir():
             #    print(f"@@@@@ Subject's associated  projects: {project.associated_project}")
 
         specimens = session.query(CDASpecimen).all()
+
+        # n = 50  # reduce size
+        # for _ in range(n):
+        #   reduced_specimens = session.execute(
+        #        select(CDASpecimen)
+        #        .order_by(func.random())
+        #        .limit(n)
+        #    ).scalars().all()
+
         if verbose:
             print("****@@@@ SPECIMEN:")
             for specimen in specimens:
                 print(f"id: {specimen.id}, source_material_type: {specimen.source_material_type}")
+        """
+        fhir_specimens = []
+        specimen_bds = []
+        for specimen in specimens:
+            _cda_subject = session.execute(
+                session.query(CDASubject)
+                .filter_by(id=specimen.derived_from_subject)
+            ).first()
 
+            _cda_parent_specimen = session.execute(
+                session.query(CDASpecimen)
+                .filter_by(id=specimen.derived_from_specimen)
+            ).first()
+
+            if _cda_subject:
+                # if subject and specimen derived from id exists in relative tables, then create the specimen
+                # TODO: One sample missing - data/META:0 references not found {'Specimen/6278af72-ca29-5844-91e8-053296e3abb2'}
+
+                _specimen_patient = patient_transformer.transform_human_subjects(_cda_subject)
+                fhir_specimen = specimen_transformer.fhir_specimen(specimen, _specimen_patient[0])
+
+                if fhir_specimen:
+                    fhir_specimens.append(fhir_specimen)
+
+                    specimen_bd = specimen_transformer.specimen_body_structure(specimen, _specimen_patient[0])
+                    if specimen_bd:
+                        specimen_bds.append(specimen_bd)
+
+        if save and fhir_specimens:
+            fhir_specimens = {fs.id: fs for fs in fhir_specimens if fs}.values()  # remove duplicates should be a better way
+            _fhir_specimens = [orjson.loads(s.json()) for s in fhir_specimens]
+            fhir_ndjson(_fhir_specimens,
+                        str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Specimen.ndjson")))
+
+            fhir_specimen_dbs = {sbd.id: sbd for sbd in specimen_bds if
+                              sbd}.values()
+            fhir_specimen_dbs = [orjson.loads(s.json()) for s in fhir_specimen_dbs]
+            fhir_ndjson(fhir_specimen_dbs,
+                        str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "BodyStructure.ndjson")))
+        """
         cda_research_subjects = session.query(CDAResearchSubject).all()
         if verbose:
             print("==== research subjects:")

@@ -2,16 +2,21 @@ import re
 import copy
 from typing import Optional
 from fhir.resources.patient import Patient
+from fhir.resources.specimen import Specimen, SpecimenCollection
 from fhir.resources.identifier import Identifier
 from fhir.resources.extension import Extension
 from fhir.resources.observation import Observation
 from fhir.resources.researchstudy import ResearchStudy
+from fhir.resources.bodystructure import BodyStructure, BodyStructureIncludedStructure
 from fhir.resources.researchsubject import ResearchSubject
 from fhir.resources.codeableconcept import CodeableConcept
+from fhir.resources.reference import Reference
+from fhir.resources.codeablereference import CodeableReference
 from fhir.resources.condition import Condition, ConditionStage
+from fhir.resources.period import Period
 from sqlalchemy.orm import Session
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject, \
-    CDADiagnosis
+    CDADiagnosis, CDASpecimen, CDAResearchSubjectSpecimen
 from uuid import uuid3, uuid5, NAMESPACE_DNS
 
 
@@ -330,7 +335,8 @@ class ConditionTransformer(Transformer):
 
     def condition(self, diagnosis: CDADiagnosis, patient: PatientTransformer) -> Condition:
         if diagnosis.primary_diagnosis is None or not re.match(r"^[^\s]+(\s[^\s]+)*$", diagnosis.primary_diagnosis):
-            print(f"---- SKIPPING DIAGNOSIS {diagnosis.id} due to missing or invalid primary diagnosis string per fhir standards.")
+            print(
+                f"---- SKIPPING DIAGNOSIS {diagnosis.id} due to missing or invalid primary diagnosis string per fhir standards.")
             return None
 
         condition_identifier = self.condition_identifier(diagnosis)
@@ -482,3 +488,163 @@ class ConditionTransformer(Transformer):
     def condition_mintid(self, condition_identifier: Identifier) -> str:
         """CDA Diagnosis Condition FHIR Mint ID."""
         return self.mint_id(identifier=condition_identifier, resource_type="Condition")
+
+
+class SpecimenTransformer(Transformer):
+    def __init__(self, session: Session):
+        super().__init__(session)
+        self.session = session
+        self.project_id = 'CDA'
+        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+
+    def fhir_specimen(self, cda_specimen: CDASpecimen, patient: PatientTransformer) -> Specimen:
+
+        fhir_specimen_identifier = self.specimen_identifier(cda_specimen)
+        fhir_specimen_id = self.specimen_mintid(fhir_specimen_identifier[0])
+
+        parent = []
+        if cda_specimen.derived_from_specimen:
+            parent_specimen_id_system = "".join(["https://cda.readthedocs.io/", "specimen"])
+            parent_specimen_identifier = Identifier(
+                **{'system': parent_specimen_id_system, 'value': cda_specimen.derived_from_specimen})
+            parent_specimen_id = self.specimen_mintid(parent_specimen_identifier)
+            parent = [{
+                "reference": f"Specimen/{parent_specimen_id}"
+            }]
+
+        collection = None
+        fhir_bodysite = self.specimen_body_structure(cda_specimen, patient)
+        if fhir_bodysite:
+            collection = SpecimenCollection(
+                **{
+                    "bodySite": CodeableReference(** {"reference": Reference(**{
+                        "reference": f"BodyStructure/{fhir_bodysite.id}"
+                    })})
+                })
+            print("of the collection: ", collection, "\n")
+
+        specimen_type = None
+        if cda_specimen.source_material_type:
+            specimen_type = CodeableConcept(
+                **{
+                    "coding": [
+                        {
+                            "system": "https://cda.readthedocs.io/",
+                            "code": cda_specimen.source_material_type,
+                            "display": cda_specimen.source_material_type
+                        }
+                    ]
+                }
+            )
+
+        specimen = Specimen(
+            **{
+                "id": fhir_specimen_id,
+                "identifier": fhir_specimen_identifier,
+                "type": specimen_type,
+                "subject": {
+                    "reference": f"Patient/{patient.id}"
+                },
+                "parent": parent,
+                "collection": collection,
+            }
+        )
+
+        return specimen
+
+    def specimen_observation(self, cda_specimen, patient, _specimen_id) -> Observation:
+        obs = Observation(
+            **{
+                "id": "observation-sequencing-parameters",
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "laboratory",
+                                "display": "Laboratory"
+                            }
+                        ]
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://loinc.org",
+                            "code": "81247-9",
+                            "display": "Master HL7 genetic variant reporting panel"
+                        }
+                    ]
+                },
+                "subject": {
+                    "reference": "Patient/"
+                },
+                "specimen": {
+                    "reference": "Specimen/"
+                },
+                "focus": [{
+                    "reference": "Specimen/"
+                }],
+                "component": []
+            }
+        )
+        return obs
+
+    def specimen_body_structure(self, cda_specimen, patient) -> BodyStructure:
+
+        if (cda_specimen.anatomical_site and 'Not specified in data' not in cda_specimen.anatomical_site
+                and re.match(r"^[^\s]+(\s[^\s]+)*$", cda_specimen.anatomical_site)):
+
+            body_structure_included_structure = []
+            # requires content harmonization
+            if ":" in cda_specimen.anatomical_site:
+                code, display = cda_specimen.anatomical_site.split(":")
+                body_structure_included_structure.append(BodyStructureIncludedStructure(**{"structure":
+                    {"coding": [{
+                        "system": "https://cda.readthedocs.io/",
+                        "code": code.strip(),
+                        "display": display.strip()
+                    }]}
+                }))
+            elif "," in cda_specimen.anatomical_site and ":" not in cda_specimen.anatomical_site and "NOS" not in cda_specimen.anatomical_site and "Nos" not in cda_specimen.anatomical_site:
+                body_sites = cda_specimen.anatomical_site.split(",")
+                for body_site in body_sites:
+                    body_structure_included_structure.append(BodyStructureIncludedStructure(**{"structure":
+                        {"coding": [{
+                            "system": "https://cda.readthedocs.io/",
+                            "code": body_site.strip(),
+                            "display": body_site.strip()
+                        }]}
+                    }))
+            else:
+                body_structure_included_structure = [BodyStructureIncludedStructure(**{"structure":
+                    {"coding": [{
+                        "system": "https://cda.readthedocs.io/",
+                        "code": cda_specimen.anatomical_site,
+                        "display": cda_specimen.anatomical_site
+                    }]}
+                })]
+
+            cda_system = "".join(["https://cda.readthedocs.io", ])
+            bd_identifier = Identifier(**{'system': cda_system, 'value': str(cda_specimen.anatomical_site)})
+
+            body_structure = BodyStructure(
+                **{"id": self.mint_id(identifier=bd_identifier, resource_type="BodyStructure"),
+                   "includedStructure": body_structure_included_structure,
+                   "patient": {
+                       "reference": f"Patient/{patient.id}"
+                   }})
+
+            return body_structure
+
+    @staticmethod
+    def specimen_identifier(cda_specimen: CDASpecimen) -> list[Identifier]:
+        """CDA Specimen FHIR Identifier."""
+        specimen_id_system = "".join(["https://cda.readthedocs.io/", "specimen"])
+        specimen_identifier = Identifier(**{'system': specimen_id_system, 'value': cda_specimen.id})
+        return [specimen_identifier]
+
+    def specimen_mintid(self, specimen_identifier: Identifier) -> str:
+        """CDA Specimen FHIR Mint ID."""
+        return self.mint_id(identifier=specimen_identifier, resource_type="Specimen")

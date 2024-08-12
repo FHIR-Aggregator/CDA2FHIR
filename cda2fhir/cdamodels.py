@@ -190,3 +190,23 @@ class CDAResearchSubjectSpecimen(Base):
     researchsubject: Mapped["CDAResearchSubject"] = relationship(
         back_populates="specimen_researchsubjects"
     )
+
+
+class ProjectdbGap(Base):
+    __tablename__ = 'project_dbGap'
+    query: QueryPropertyDescriptor = Session.query_property()
+    GDC_project_id: Mapped[str] = mapped_column(String, primary_key=True)
+    dbgap_study_accession: Mapped[str] = mapped_column(String, primary_key=True)
+
+
+class ProgramdbGap(Base):
+    __tablename__ = 'program_dbGap'
+    query: QueryPropertyDescriptor = Session.query_property()
+    GDC_program_name: Mapped[str] = mapped_column(String, primary_key=True)
+    dbgap_study_accession: Mapped[str] = mapped_column(String, primary_key=True)
+
+
+# class CDAdbGap(Base):
+#    __tablename__ = 'cda_dbGap'
+#    query: QueryPropertyDescriptor = Session.query_property()
+#    # TODO: make one table via all xlsx sheets
