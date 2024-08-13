@@ -6,7 +6,7 @@ from fhir.resources.identifier import Identifier
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, \
-    CDASubjectAlias, CDASubjectProject, CDAResearchSubjectDiagnosis, CDASpecimen
+    CDASubjectAlias, CDASubjectProject, CDAResearchSubjectDiagnosis, CDASpecimen, ProjectdbGap, ProgramdbGap
 from cda2fhir.transformer import Transformer, PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer, \
     ConditionTransformer, SpecimenTransformer
 from sqlalchemy import select, func
@@ -130,7 +130,7 @@ def cda2fhir():
             patients = [orjson.loads(patient.json()) for patient in patients]
             fhir_ndjson(patients,
                         str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Patient.ndjson")))
-        """
+
         observations = []
         for subject in subjects:
             if subject.cause_of_death:
@@ -174,6 +174,18 @@ def cda2fhir():
 
                 for cda_rs_subject in query_research_subjects:
                     research_study = research_study_transformer.research_study(project, cda_rs_subject)
+
+                    # query and fetch projet's dbgap id
+                    dbGap_study_accession = session.execute(
+                        session.query(ProjectdbGap)
+                        .filter_by(GDC_project_id=research_study.name)
+                    ).first()
+
+                    if dbGap_study_accession:
+                        print("DBGAP STUDY ACCESSION: ", dbGap_study_accession)
+                        dbGap_identifier = Identifier(**{'system': "https://www.ncbi.nlm.nih.gov/gap/", 'value': dbGap_study_accession[0].dbgap_study_accession})
+                        research_study.identifier.append(dbGap_identifier)
+
                     if research_study:
                         research_studies.append(research_study)
                         if _patient and research_study:
@@ -244,7 +256,7 @@ def cda2fhir():
             patient_observations = [orjson.loads(observation.json()) for observation in observations]
             fhir_ndjson(patient_observations, str(Path(
                 importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Observation.ndjson")))
-        """
+
     finally:
         print("****** Closing Session ******")
         session.close()
