@@ -33,6 +33,7 @@ def cda2fhir():
 
     verbose = True
     save = True
+    observations = []
 
     try:
         subjects = session.query(CDASubject).all()
@@ -46,22 +47,22 @@ def cda2fhir():
 
         specimens = session.query(CDASpecimen).all()
 
-        # n = 50  # reduce size
-        # for _ in range(n):
-        #   reduced_specimens = session.execute(
-        #        select(CDASpecimen)
-        #        .order_by(func.random())
-        #        .limit(n)
-        #    ).scalars().all()
+        n = 50  # reduce size
+        for _ in range(n):
+           reduced_specimens = session.execute(
+                select(CDASpecimen)
+                .order_by(func.random())
+                .limit(n)
+            ).scalars().all()
 
         if verbose:
             print("****@@@@ SPECIMEN:")
             for specimen in specimens:
                 print(f"id: {specimen.id}, source_material_type: {specimen.source_material_type}")
-        """
+
         fhir_specimens = []
         specimen_bds = []
-        for specimen in specimens:
+        for specimen in reduced_specimens:
             _cda_subject = session.execute(
                 session.query(CDASubject)
                 .filter_by(id=specimen.derived_from_subject)
@@ -86,6 +87,10 @@ def cda2fhir():
                     if specimen_bd:
                         specimen_bds.append(specimen_bd)
 
+                    _specimen_obs = specimen_transformer.specimen_observation(specimen, _specimen_patient[0], fhir_specimen.id)
+                    if _specimen_obs:
+                        observations.append(_specimen_obs)
+
         if save and fhir_specimens:
             fhir_specimens = {fs.id: fs for fs in fhir_specimens if fs}.values()  # remove duplicates should be a better way
             _fhir_specimens = [orjson.loads(s.json()) for s in fhir_specimens]
@@ -97,7 +102,7 @@ def cda2fhir():
             fhir_specimen_dbs = [orjson.loads(s.json()) for s in fhir_specimen_dbs]
             fhir_ndjson(fhir_specimen_dbs,
                         str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "BodyStructure.ndjson")))
-        """
+
         cda_research_subjects = session.query(CDAResearchSubject).all()
         if verbose:
             print("==== research subjects:")
@@ -131,7 +136,7 @@ def cda2fhir():
             fhir_ndjson(patients,
                         str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Patient.ndjson")))
 
-        observations = []
+
         for subject in subjects:
             if subject.cause_of_death:
                 patient_identifiers = patient_transformer.patient_identifier(subject)

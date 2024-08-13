@@ -552,44 +552,97 @@ class SpecimenTransformer(Transformer):
 
         return specimen
 
-    def specimen_observation(self, cda_specimen, patient, _specimen_id) -> Observation:
-        obs = Observation(
-            **{
-                "id": "observation-sequencing-parameters",
-                "status": "final",
-                "category": [
+    @staticmethod
+    def get_component(key, value=None, component_type=None,
+                      system="https://cda.readthedocs.io"):
+        if component_type == 'string':
+            value = {"valueString": value}
+        elif component_type == 'int':
+            value = {"valueInteger": value}
+        elif component_type == 'float':
+            value = {"valueQuantity": {"value": value}}
+        elif component_type == 'bool':
+            value = {"valueBoolean": value}
+        elif component_type == 'dateTime':
+            value = {"valueDateTime": value}
+        else:
+            pass
+
+        component = {
+            "code": {
+                "coding": [
                     {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
-                                "code": "laboratory",
-                                "display": "Laboratory"
-                            }
-                        ]
+                        "system": system,
+                        "code": key,
+                        "display": key
                     }
                 ],
-                "code": {
-                    "coding": [
-                        {
-                            "system": "http://loinc.org",
-                            "code": "81247-9",
-                            "display": "Master HL7 genetic variant reporting panel"
-                        }
-                    ]
-                },
-                "subject": {
-                    "reference": "Patient/"
-                },
-                "specimen": {
-                    "reference": "Specimen/"
-                },
-                "focus": [{
-                    "reference": "Specimen/"
-                }],
-                "component": []
+                "text": key
             }
-        )
-        return obs
+        }
+        if value:
+            component.update(value)
+
+        return component
+
+    def specimen_observation(self, cda_specimen, patient, _specimen_id) -> Observation:
+        components = []
+        if cda_specimen.days_to_collection:
+            days_to_collection = self.get_component("days_to_collection", value=cda_specimen.days_to_collection, component_type=int,
+                          system="https://cda.readthedocs.io")
+            if days_to_collection:
+                components.append(days_to_collection)
+
+        if cda_specimen.specimen_type:
+            specimen_type = self.get_component("specimen_type", value=cda_specimen.specimen_type, component_type=str,
+                          system="https://cda.readthedocs.io")
+            if specimen_type:
+                components.append(specimen_type)
+
+        if cda_specimen.primary_disease_type:
+            primary_disease_type = self.get_component("primary_disease_type", value=cda_specimen.primary_disease_type, component_type=str,
+                          system="https://cda.readthedocs.io")
+            if primary_disease_type:
+                components.append(primary_disease_type)
+
+        if components:
+            obs = Observation(
+                **{
+                    "id": "observation-sequencing-parameters",
+                    "status": "final",
+                    "category": [
+                        {
+                            "coding": [
+                                {
+                                    "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                    "code": "laboratory",
+                                    "display": "Laboratory"
+                                }
+                            ]
+                        }
+                    ],
+                    "code": {
+                        "coding": [
+                            {
+                                "system": "http://loinc.org",
+                                "code": "81247-9",
+                                "display": "Master HL7 genetic variant reporting panel" # TODO: check specimen related codes
+                            }
+                        ]
+                    },
+                    "subject": {
+                        "reference": f"Patient/{patient.id}"
+                    },
+                    "specimen": {
+                        "reference": f"Specimen/{_specimen_id}"
+                    },
+                    "focus": [{
+                        "reference": f"Specimen/{_specimen_id}"
+                    }],
+                    "component": components
+                }
+            )
+            return obs
 
     def specimen_body_structure(self, cda_specimen, patient) -> BodyStructure:
 
