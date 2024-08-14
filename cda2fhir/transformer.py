@@ -555,6 +555,7 @@ class SpecimenTransformer(Transformer):
     @staticmethod
     def get_component(key, value=None, component_type=None,
                       system="https://cda.readthedocs.io"):
+        print("SPECIMEN Component :", key, value, component_type)
         if component_type == 'string':
             value = {"valueString": value}
         elif component_type == 'int':
@@ -580,6 +581,7 @@ class SpecimenTransformer(Transformer):
                 "text": key
             }
         }
+
         if value:
             component.update(value)
 
@@ -588,27 +590,30 @@ class SpecimenTransformer(Transformer):
     def specimen_observation(self, cda_specimen, patient, _specimen_id) -> Observation:
         components = []
         if cda_specimen.days_to_collection:
-            days_to_collection = self.get_component("days_to_collection", value=cda_specimen.days_to_collection, component_type=int,
+            days_to_collection = self.get_component("days_to_collection", value=cda_specimen.days_to_collection, component_type="int",
                           system="https://cda.readthedocs.io")
             if days_to_collection:
                 components.append(days_to_collection)
 
         if cda_specimen.specimen_type:
-            specimen_type = self.get_component("specimen_type", value=cda_specimen.specimen_type, component_type=str,
+            specimen_type = self.get_component("specimen_type", value=cda_specimen.specimen_type, component_type="string",
                           system="https://cda.readthedocs.io")
             if specimen_type:
                 components.append(specimen_type)
 
         if cda_specimen.primary_disease_type:
-            primary_disease_type = self.get_component("primary_disease_type", value=cda_specimen.primary_disease_type, component_type=str,
+            primary_disease_type = self.get_component("primary_disease_type", value=cda_specimen.primary_disease_type, component_type="string",
                           system="https://cda.readthedocs.io")
             if primary_disease_type:
                 components.append(primary_disease_type)
 
         if components:
+            observation_identifier = Identifier(**{'system': "https://cda.readthedocs.io/specimen_observation", 'value': _specimen_id})
+            observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
+
             obs = Observation(
                 **{
-                    "id": "observation-sequencing-parameters",
+                    "id": observation_id,
                     "status": "final",
                     "category": [
                         {

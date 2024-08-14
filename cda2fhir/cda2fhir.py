@@ -63,6 +63,7 @@ def cda2fhir():
         fhir_specimens = []
         specimen_bds = []
         for specimen in reduced_specimens:
+            """
             _cda_subject = session.execute(
                 session.query(CDASubject)
                 .filter_by(id=specimen.derived_from_subject)
@@ -72,12 +73,23 @@ def cda2fhir():
                 session.query(CDASpecimen)
                 .filter_by(id=specimen.derived_from_specimen)
             ).first()
+            """
+
+            _cda_subject = session.execute(
+                select(CDASubject)
+                .filter_by(id=specimen.derived_from_subject)
+            ).scalar_one_or_none()
+
+            _cda_parent_specimen = session.execute(
+                select(CDASpecimen)
+                .filter_by(id=specimen.derived_from_specimen)
+            ).scalar_one_or_none()
 
             if _cda_subject:
                 # if subject and specimen derived from id exists in relative tables, then create the specimen
                 # TODO: One sample missing - data/META:0 references not found {'Specimen/6278af72-ca29-5844-91e8-053296e3abb2'}
 
-                _specimen_patient = patient_transformer.transform_human_subjects(_cda_subject)
+                _specimen_patient = patient_transformer.transform_human_subjects([_cda_subject])
                 fhir_specimen = specimen_transformer.fhir_specimen(specimen, _specimen_patient[0])
 
                 if fhir_specimen:
@@ -187,7 +199,6 @@ def cda2fhir():
                     ).first()
 
                     if dbGap_study_accession:
-                        print("DBGAP STUDY ACCESSION: ", dbGap_study_accession)
                         dbGap_identifier = Identifier(**{'system': "https://www.ncbi.nlm.nih.gov/gap/", 'value': dbGap_study_accession[0].dbgap_study_accession})
                         research_study.identifier.append(dbGap_identifier)
 
