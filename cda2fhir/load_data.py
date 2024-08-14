@@ -8,10 +8,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.engine.reflection import Inspector
 from cda2fhir.database import init_db, SessionLocal
-from cda2fhir.cdamodels import CDASubject, CDASubjectResearchSubject, CDAResearchSubject, CDADiagnosis, \
-    CDAResearchSubjectDiagnosis, \
-    CDATreatment, CDAResearchSubjectTreatment, CDASubjectAlias, CDASubjectProject, CDASpecimen, \
-    CDAResearchSubjectSpecimen, ProjectdbGap, ProgramdbGap
+from cda2fhir.cdamodels import (CDASubject, CDASubjectResearchSubject, CDAResearchSubject, CDADiagnosis, \
+    CDAResearchSubjectDiagnosis, CDATreatment, CDAResearchSubjectTreatment, CDASubjectAlias, CDASubjectProject, \
+    CDASpecimen, CDASubjectIdentifier, CDAResearchSubjectSpecimen, ProjectdbGap, GDCProgramdbGap)
 
 
 def load_to_db(path, table_class, session):
@@ -79,7 +78,9 @@ def load_data():
     clear_table(CDASpecimen, session)
     clear_table(CDAResearchSubjectSpecimen, session)
     clear_table(ProjectdbGap, session)
-    clear_table(ProgramdbGap, session)
+    clear_table(GDCProgramdbGap, session)
+    clear_table(CDASubjectIdentifier, session)
+
 
     try:
         # if not table_exists(engine, 'subject'): #TODO: add when relations and tables are defined
@@ -89,6 +90,10 @@ def load_data():
         load_to_db(
             str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'researchsubject.json')),
             CDAResearchSubject, session)
+        # if not table_exists(engine, ''):
+        load_to_db(str(Path(importlib.resources.files(
+            'cda2fhir').parent / 'data' / 'raw' / 'subject_identifier.json')),
+                   CDASubjectIdentifier, session)
         # if not table_exists(engine, 'subject_researchsubject'):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_researchsubject.tsv')),
@@ -124,12 +129,12 @@ def load_data():
                        CDAResearchSubjectSpecimen, session)
         # if not table_exists(engine, ''):
         load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'dpgap_to_project' / 'zz61_all_GDC_projects_fully_case-covered_by_dbgap_studies.xlsx')),
+            'cda2fhir').parent / 'data' / 'raw' / 'dbgap_to_project' / 'zz61_all_GDC_projects_fully_case-covered_by_dbgap_studies.xlsx')),
                        ProjectdbGap, session)
         # if not table_exists(engine, ''):
         load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'dpgap_to_project' / 'zz63_all_GDC_programs_fully_case-covered_by_dbgap_studies.xlsx')),
-                       ProgramdbGap, session)
+            'cda2fhir').parent / 'data' / 'raw' / 'dbgap_to_project' / 'zz63_all_GDC_programs_fully_case-covered_by_dbgap_studies.xlsx')),
+                       GDCProgramdbGap, session)
 
     finally:
         session.expire_all()

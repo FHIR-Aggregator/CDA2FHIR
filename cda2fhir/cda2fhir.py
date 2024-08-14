@@ -3,14 +3,18 @@ import orjson
 from pathlib import Path
 import importlib.resources
 from fhir.resources.identifier import Identifier
+from fhir.resources.researchstudy import ResearchStudy
+from fhir.resources.reference import Reference
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, \
-    CDASubjectAlias, CDASubjectProject, CDAResearchSubjectDiagnosis, CDASpecimen, ProjectdbGap, ProgramdbGap
+    CDASubjectAlias, CDASubjectProject, CDAResearchSubjectDiagnosis, CDASpecimen, ProjectdbGap, GDCProgramdbGap, \
+    CDASubjectIdentifier
 from cda2fhir.transformer import Transformer, PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer, \
     ConditionTransformer, SpecimenTransformer
 from sqlalchemy import select, func
 
+gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDERS', 'FM', 'HCMI', 'MMRF', 'NCICCR', 'OHSU', 'ORGANOID', 'REBC', 'TARGET', 'TCGA', 'TRIO', 'VAREPOP', 'WCDT']
 
 def fhir_ndjson(entity, out_path):
     if isinstance(entity, list):
@@ -31,7 +35,7 @@ def cda2fhir():
     condition_transformer = ConditionTransformer(session)
     specimen_transformer = SpecimenTransformer(session)
 
-    verbose = True
+    verbose = False
     save = True
     observations = []
 
@@ -49,7 +53,7 @@ def cda2fhir():
 
         n = 50  # reduce size
         for _ in range(n):
-           reduced_specimens = session.execute(
+            reduced_specimens = session.execute(
                 select(CDASpecimen)
                 .order_by(func.random())
                 .limit(n)
@@ -63,18 +67,6 @@ def cda2fhir():
         fhir_specimens = []
         specimen_bds = []
         for specimen in reduced_specimens:
-            """
-            _cda_subject = session.execute(
-                session.query(CDASubject)
-                .filter_by(id=specimen.derived_from_subject)
-            ).first()
-
-            _cda_parent_specimen = session.execute(
-                session.query(CDASpecimen)
-                .filter_by(id=specimen.derived_from_specimen)
-            ).first()
-            """
-
             _cda_subject = session.execute(
                 select(CDASubject)
                 .filter_by(id=specimen.derived_from_subject)
@@ -99,21 +91,24 @@ def cda2fhir():
                     if specimen_bd:
                         specimen_bds.append(specimen_bd)
 
-                    _specimen_obs = specimen_transformer.specimen_observation(specimen, _specimen_patient[0], fhir_specimen.id)
+                    _specimen_obs = specimen_transformer.specimen_observation(specimen, _specimen_patient[0],
+                                                                              fhir_specimen.id)
                     if _specimen_obs:
                         observations.append(_specimen_obs)
 
         if save and fhir_specimens:
-            fhir_specimens = {fs.id: fs for fs in fhir_specimens if fs}.values()  # remove duplicates should be a better way
+            fhir_specimens = {fs.id: fs for fs in fhir_specimens if
+                              fs}.values()  # remove duplicates should be a better way
             _fhir_specimens = [orjson.loads(s.json()) for s in fhir_specimens]
             fhir_ndjson(_fhir_specimens,
                         str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Specimen.ndjson")))
 
             fhir_specimen_dbs = {sbd.id: sbd for sbd in specimen_bds if
-                              sbd}.values()
+                                 sbd}.values()
             fhir_specimen_dbs = [orjson.loads(s.json()) for s in fhir_specimen_dbs]
             fhir_ndjson(fhir_specimen_dbs,
-                        str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "BodyStructure.ndjson")))
+                        str(Path(
+                            importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "BodyStructure.ndjson")))
 
         cda_research_subjects = session.query(CDAResearchSubject).all()
         if verbose:
@@ -147,7 +142,6 @@ def cda2fhir():
             patients = [orjson.loads(patient.json()) for patient in patients]
             fhir_ndjson(patients,
                         str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "Patient.ndjson")))
-
 
         for subject in subjects:
             if subject.cause_of_death:
@@ -185,12 +179,19 @@ def cda2fhir():
                 _subject = (
                     session.query(CDASubject)
                     .filter(CDASubject.id == project.subject_id)
-                    .all()
+                    .all()  # there is only one
                 )
                 _patient = patient_transformer.transform_human_subjects(_subject)
 
                 for cda_rs_subject in query_research_subjects:
                     research_study = research_study_transformer.research_study(project, cda_rs_subject)
+
+                    # gdc_dbgap = session.execute(session.query(GDCProgramdbGap).filter(GDCProgramdbGap.GDC_program_name.in_(gdc_dbgap_names))).all()
+                    gdc_dbgap = session.execute(session.query(GDCProgramdbGap).where(GDCProgramdbGap.GDC_program_name.contains(research_study.name))).one_or_none()
+
+                    if gdc_dbgap:
+                        # parent dbGap ID for GDC projects ex. TCGA dgGap id for all projetcs including TCGA substring (ex. TCGA-BRCA)
+                        research_study.identifier.append(Identifier(**{"system": "https://www.ncbi.nlm.nih.gov/gap/GDC", "value": gdc_dbgap[0]}))
 
                     # query and fetch projet's dbgap id
                     dbGap_study_accession = session.execute(
@@ -199,14 +200,45 @@ def cda2fhir():
                     ).first()
 
                     if dbGap_study_accession:
-                        dbGap_identifier = Identifier(**{'system': "https://www.ncbi.nlm.nih.gov/gap/", 'value': dbGap_study_accession[0].dbgap_study_accession})
+                        dbGap_identifier = Identifier(**{'system': "https://www.ncbi.nlm.nih.gov/gap/",
+                                                         'value': dbGap_study_accession[0].dbgap_study_accession})
                         research_study.identifier.append(dbGap_identifier)
 
                     if research_study:
                         research_studies.append(research_study)
                         if _patient and research_study:
-                            _research_subject = research_subject_transformer.research_subject(cda_rs_subject, _patient[0], research_study)
+                            _research_subject = research_subject_transformer.research_subject(cda_rs_subject,
+                                                                                              _patient[0],
+                                                                                              research_study)
                             research_subjects.append(_research_subject)
+
+                            # check and fetch  program for project relation
+                            query_subject_alias = (
+                                session.query(CDASubjectAlias)
+                                .join(CDASubject)
+                                .filter(CDASubject.id == _subject[0].id)
+                                .all()  # there is only one
+                            )
+
+                            if "BEATAML" in _subject[0].id:
+                                subject_id_value = _subject[0].id.replace("BEATAML1.0.", "")
+                            else:
+                                subject_id_value = _subject[0].id.split(".")[1]
+
+                            _cda_subject_identifiers = (session.execute(
+                                select(CDASubjectIdentifier)
+                                .filter_by(
+                                    subject_alias=query_subject_alias[0].subject_alias,
+                                    value=subject_id_value))
+                                                        .all())
+
+                            for _cda_subject_identifier in _cda_subject_identifiers:
+                                _program_research_study = research_study_transformer.program_research_study(
+                                    name=_cda_subject_identifier[0].system)
+                                if _program_research_study:
+                                    research_studies.append(_program_research_study)
+                                    research_study.partOf = [
+                                        Reference(**{"reference": f"ResearchStudy/{_program_research_study.id}"})]
 
         if save and research_studies:
             research_studies = {rstudy.id: rstudy for rstudy in research_studies if
@@ -217,7 +249,7 @@ def cda2fhir():
 
         if save and research_subjects:
             research_subjects = {rsubject.id: rsubject for rsubject in research_subjects if
-                                rsubject}.values()
+                                 rsubject}.values()
             fhir_rsubjects = [orjson.loads(cdarsubject.json()) for cdarsubject in research_subjects if cdarsubject]
             fhir_ndjson(fhir_rsubjects, str(Path(
                 importlib.resources.files('cda2fhir').parent / 'data' / 'META' / "ResearchSubject.ndjson")))
@@ -228,7 +260,7 @@ def cda2fhir():
         for _ in range(n):
             reduced_diagnoses = session.execute(
                 select(CDADiagnosis)
-                .order_by(func.random()) # randomly select
+                .order_by(func.random())  # randomly select
                 .limit(n)
             ).scalars().all()
 
@@ -238,7 +270,8 @@ def cda2fhir():
                 session.query(CDASubject)
                 .join(CDASubjectResearchSubject, CDASubject.id == CDASubjectResearchSubject.subject_id)
                 .join(CDAResearchSubject, CDASubjectResearchSubject.researchsubject_id == CDAResearchSubject.id)
-                .join(CDAResearchSubjectDiagnosis, CDAResearchSubject.id == CDAResearchSubjectDiagnosis.researchsubject_id)
+                .join(CDAResearchSubjectDiagnosis,
+                      CDAResearchSubject.id == CDAResearchSubjectDiagnosis.researchsubject_id)
                 .filter(CDAResearchSubjectDiagnosis.diagnosis_id == diagnosis.id)
                 .all()
             )
@@ -246,7 +279,8 @@ def cda2fhir():
             if _subject_diagnosis:
                 _patient_diagnosis = patient_transformer.transform_human_subjects(_subject_diagnosis)
                 if _patient_diagnosis and _patient_diagnosis[0].id:
-                    print(f"------- patient id for diagnosis ID {diagnosis.id} is : {_patient_diagnosis[0].id}")
+                    if verbose:
+                        print(f"------- patient id for diagnosis ID {diagnosis.id} is : {_patient_diagnosis[0].id}")
                     condition = condition_transformer.condition(diagnosis, _patient_diagnosis[0])
                     if condition:
                         conditions.append(condition)
@@ -257,7 +291,9 @@ def cda2fhir():
                             if stage.assessment and stage.summary:
                                 _display = stage.summary.coding[0].display
                                 if _display:
-                                    observation = condition_transformer.condition_observation(diagnosis, _display, _patient_diagnosis[0], condition.id)
+                                    observation = condition_transformer.condition_observation(diagnosis, _display,
+                                                                                              _patient_diagnosis[0],
+                                                                                              condition.id)
                                     if observation:
                                         observations.append(observation)
 

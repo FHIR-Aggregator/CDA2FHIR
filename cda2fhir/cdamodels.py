@@ -199,8 +199,8 @@ class ProjectdbGap(Base):
     dbgap_study_accession: Mapped[str] = mapped_column(String, primary_key=True)
 
 
-class ProgramdbGap(Base):
-    __tablename__ = 'program_dbGap'
+class GDCProgramdbGap(Base):
+    __tablename__ = 'gdc_program_dbGap'
     query: QueryPropertyDescriptor = Session.query_property()
     GDC_program_name: Mapped[str] = mapped_column(String, primary_key=True)
     dbgap_study_accession: Mapped[str] = mapped_column(String, primary_key=True)
@@ -210,3 +210,17 @@ class ProgramdbGap(Base):
 #    __tablename__ = 'cda_dbGap'
 #    query: QueryPropertyDescriptor = Session.query_property()
 #    # TODO: make one table via all xlsx sheets
+
+class CDASubjectIdentifier(Base):
+    __tablename__ = 'cda_subject_identifier' # CDA provenance info relation table.
+    query: QueryPropertyDescriptor = Session.query_property()
+    subject_alias:  Mapped[Optional[int]] = mapped_column(Integer, primary_key=True)
+    value: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
+    system: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
+    field_name: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
+
+
+
+
+
+

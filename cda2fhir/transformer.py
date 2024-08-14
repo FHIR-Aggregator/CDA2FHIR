@@ -52,6 +52,21 @@ class Transformer:
 
         return research_subject
 
+    def program_research_study(self, name) -> ResearchStudy:
+        """create top level program FHIR ResearchStudy"""
+        _program_identifier = Identifier(**{"system": "".join(["https://cda.readthedocs.io/", "system"]), "value": name})
+        _id = self.mint_id(identifier=_program_identifier, resource_type="ResearchStudy")
+        research_study = ResearchStudy(
+            **{
+                'id': _id,
+                'identifier': [_program_identifier],
+                'status': 'active',
+                'name': name
+            }
+        )
+        if research_study:
+            return research_study
+
 
 class PatientTransformer(Transformer):
     def __init__(self, session: Session):
