@@ -1,6 +1,4 @@
 import re
-import copy
-from typing import Optional
 from fhir.resources.patient import Patient
 from fhir.resources.specimen import Specimen, SpecimenCollection
 from fhir.resources.identifier import Identifier
@@ -13,7 +11,6 @@ from fhir.resources.codeableconcept import CodeableConcept
 from fhir.resources.reference import Reference
 from fhir.resources.codeablereference import CodeableReference
 from fhir.resources.condition import Condition, ConditionStage
-from fhir.resources.period import Period
 from sqlalchemy.orm import Session
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject, \
     CDADiagnosis, CDASpecimen, CDAResearchSubjectSpecimen

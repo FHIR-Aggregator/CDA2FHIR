@@ -3,7 +3,6 @@ import json
 import mimetypes
 from pathlib import Path
 import importlib.resources
-from cda2fhir.database import engine
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.engine.reflection import Inspector
