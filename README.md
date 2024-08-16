@@ -22,14 +22,20 @@ pip install -e .
 Usage: cda2fhir transform [OPTIONS]
 
 Options:
-  -s, --save             Save FHIR ndjson to CDA2FHIR/data/META folder.
-                         [default: True]
+  -s, --save               Save FHIR ndjson to CDA2FHIR/data/META folder.
+                           [default: True]
   -v, --verbose
-  -ns, --n_samples TEXT  Number of samples to randomly select - max 100.
-  -nd, --n_samples TEXT  Number of diagnosis to randomly select - max 100.
-  --help                 Show this message and exit.
+  -ns, --n_samples TEXT    Number of samples to randomly select - max 100.
+  -nd, --n_diagnosis TEXT  Number of diagnosis to randomly select - max 100.
+  -p, --path TEXT          Path to save the FHIR NDJSON files. default is
+                           CDA2FHIR/data/META.
+  --help                   Show this message and exit.
 ``` 
 
+- example 
+``` 
+cda2fhir transform 
+``` 
 
 ### Testing (TBD)
 ```
