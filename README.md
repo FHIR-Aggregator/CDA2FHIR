@@ -37,7 +37,7 @@ Options:
 cda2fhir transform 
 ``` 
 
-### Testing (TBD)
+### Testing
 ```
 pytest -cov 
 ```
