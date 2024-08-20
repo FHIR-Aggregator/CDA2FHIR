@@ -79,8 +79,6 @@ def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
 
             if _cda_subject:
                 # if subject and specimen derived from id exists in relative tables, then create the specimen
-                # TODO: One sample missing - data/META:0 references not found {'Specimen/6278af72-ca29-5844-91e8-053296e3abb2'}
-
                 _specimen_patient = patient_transformer.transform_human_subjects([_cda_subject])
                 fhir_specimen = specimen_transformer.fhir_specimen(specimen, _specimen_patient[0])
 

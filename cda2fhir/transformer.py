@@ -514,8 +514,8 @@ class SpecimenTransformer(Transformer):
         fhir_specimen_identifier = self.specimen_identifier(cda_specimen)
         fhir_specimen_id = self.specimen_mintid(fhir_specimen_identifier[0])
 
-        parent = []
-        if cda_specimen.derived_from_specimen:
+        parent = None
+        if cda_specimen.derived_from_specimen and cda_specimen.derived_from_specimen != "initial specimen":
             parent_specimen_id_system = "".join(["https://cda.readthedocs.io/", "specimen"])
             parent_specimen_identifier = Identifier(
                 **{'system': parent_specimen_id_system, 'value': cda_specimen.derived_from_specimen})
@@ -557,10 +557,12 @@ class SpecimenTransformer(Transformer):
                 "subject": {
                     "reference": f"Patient/{patient.id}"
                 },
-                "parent": parent,
                 "collection": collection,
             }
         )
+
+        if parent:
+            specimen.parent = parent
 
         return specimen
 
