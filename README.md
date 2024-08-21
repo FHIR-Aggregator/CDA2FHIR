@@ -20,7 +20,8 @@ pip install -e .
 ### Transform to FHIR 
 
 ### Data 
-To run the transformer, please make sure CDA raw data is in ./data/raw/ directory.
+To run the transformer, please make sure [CDA](https://cda.readthedocs.io/en/latest/) raw data is in ./data/raw/ directory.
+Contact cancerdataaggregator @ gmail for retrieving the raw data.  
 
 ``` 
 Usage: cda2fhir transform [OPTIONS]
