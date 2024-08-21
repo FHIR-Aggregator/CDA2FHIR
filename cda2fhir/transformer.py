@@ -16,12 +16,12 @@ from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearc
     CDADiagnosis, CDASpecimen
 from uuid import uuid3, uuid5, NAMESPACE_DNS
 
-
+CDA_SITE = 'cda.readthedocs.io'
 class Transformer:
     def __init__(self, session: Session):
         self.session = session
         self.project_id = 'CDA'
-        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+        self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
 
     def mint_id(self, identifier: Identifier | str, resource_type: str = None) -> str:
         """create a UUID from an identifier. - mint id via Walsh's convention
@@ -51,7 +51,7 @@ class Transformer:
 
     def program_research_study(self, name) -> ResearchStudy:
         """create top level program FHIR ResearchStudy"""
-        _program_identifier = Identifier(**{"system": "".join(["https://cda.readthedocs.io/", "system"]), "value": name})
+        _program_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "system"]), "value": name})
         _id = self.mint_id(identifier=_program_identifier, resource_type="ResearchStudy")
         research_study = ResearchStudy(
             **{
@@ -70,7 +70,7 @@ class PatientTransformer(Transformer):
         super().__init__(session)
         self.session = session
         self.project_id = 'CDA'
-        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+        self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
 
     def subject_to_patient(self, subject: CDASubject) -> Patient:
         """transform CDA Subject to FHIR Patient."""
@@ -102,10 +102,10 @@ class PatientTransformer(Transformer):
 
     def patient_identifier(self, subject: CDASubject) -> list[Identifier]:
         """FHIR patient Identifier from a CDA subject."""
-        subject_id_system = "".join(["https://cda.readthedocs.io/", "subject_id"])
+        subject_id_system = "".join([f"https://{CDA_SITE}/", "subject_id"])
         subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id)})
 
-        subject_alias_system = "".join(["https://cda.readthedocs.io/", "subject_alias"])
+        subject_alias_system = "".join([f"https://{CDA_SITE}/", "subject_alias"])
         subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.alias_id)})
         return [subject_id_identifier, subject_alias_identifier]
 
@@ -233,7 +233,7 @@ class ResearchStudyTransformer(Transformer):
         super().__init__(session)
         self.session = session
         self.project_id = 'CDA'
-        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+        self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
 
     def research_study(self, project: CDASubjectProject, research_subject: CDAResearchSubject) -> ResearchStudy:
         """CDA Projects to FHIR ResearchStudy."""
@@ -249,7 +249,7 @@ class ResearchStudyTransformer(Transformer):
                 condition = [CodeableConcept(**{'coding': [{
                     'code': research_subject.primary_diagnosis_condition,
                     'display': research_subject.primary_diagnosis_condition,
-                    'system': 'https://cda.readthedocs.io/'}]})]
+                    'system': f'https://{CDA_SITE}/'}]})]
 
             research_study = ResearchStudy(
                 **{
@@ -265,7 +265,7 @@ class ResearchStudyTransformer(Transformer):
     @staticmethod
     def research_study_identifier(project: CDASubjectProject) -> list[Identifier]:
         """CDA project FHIR Identifier."""
-        project_id_system = "".join(["https://cda.readthedocs.io/", "associated_project"])
+        project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
         project_id_identifier = Identifier(**{'system': project_id_system, 'value': str(project.associated_project)})
 
         return [project_id_identifier]
@@ -280,7 +280,7 @@ class ResearchSubjectTransformer(Transformer):
         super().__init__(session)
         self.session = session
         self.project_id = 'CDA'
-        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+        self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
 
     def research_subject(self, cda_research_subject: CDAResearchSubject, patient: PatientTransformer,
                          research_study: ResearchStudyTransformer) -> ResearchSubject:
@@ -305,7 +305,7 @@ class ResearchSubjectTransformer(Transformer):
     @staticmethod
     def research_subject_identifier(cda_research_subject: CDAResearchSubject) -> list[Identifier]:
         """CDA research subject FHIR Identifier."""
-        research_subject_id_system = "".join(["https://cda.readthedocs.io/", "researchsubject"])
+        research_subject_id_system = "".join([f"https://{CDA_SITE}/", "researchsubject"])
         research_subject_id_identifier = Identifier(
             **{'system': research_subject_id_system, 'value': cda_research_subject.id})
 
@@ -321,7 +321,7 @@ class ConditionTransformer(Transformer):
         super().__init__(session)
         self.session = session
         self.project_id = 'CDA'
-        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+        self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
 
     def condition(self, diagnosis: CDADiagnosis, patient: PatientTransformer) -> Condition:
         if diagnosis.primary_diagnosis is None or not re.match(r"^[^\s]+(\s[^\s]+)*$", diagnosis.primary_diagnosis):
@@ -343,7 +343,7 @@ class ConditionTransformer(Transformer):
             stage_summary = CodeableConcept(**{
                 "coding": [
                     {
-                        "system": "https://cda.readthedocs.io/",
+                        "system": f"https://{CDA_SITE}/",
                         "code": _stage_display,
                         "display": _stage_display
                     }
@@ -401,7 +401,7 @@ class ConditionTransformer(Transformer):
                 ),
                 "code": CodeableConcept(
                     **{
-                        "coding": [{"system": "https://cda.readthedocs.io/",
+                        "coding": [{"system": f"https://{CDA_SITE}/",
                                     "code": code,
                                     "display": display}]}
                 ),
@@ -412,7 +412,7 @@ class ConditionTransformer(Transformer):
         return _condition
 
     def condition_observation(self, diagnosis, display, patient, _condition_id) -> Observation:
-        condition_id_system = "".join(["https://cda.readthedocs.io/", "diagnosis"])
+        condition_id_system = "".join([f"https://{CDA_SITE}/", "diagnosis"])
         observation_identifier = Identifier(**{'system': condition_id_system, 'value': diagnosis.id})
         observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
 
@@ -459,7 +459,7 @@ class ConditionTransformer(Transformer):
                 }],
                 "valueCodeableConcept": {
                     "coding": [{
-                        "system": "https://cda.readthedocs.io/",
+                        "system": f"https://{CDA_SITE}/",
                         "code": display,
                         "display": display
                     }
@@ -472,7 +472,7 @@ class ConditionTransformer(Transformer):
     @staticmethod
     def condition_identifier(cda_diagnosis: CDADiagnosis) -> list[Identifier]:
         """CDA Diagnosis Condition FHIR Identifier."""
-        condition_id_system = "".join(["https://cda.readthedocs.io/", "diagnosis"])
+        condition_id_system = "".join([f"https://{CDA_SITE}/", "diagnosis"])
         condition_identifier = Identifier(**{'system': condition_id_system, 'value': cda_diagnosis.id})
         return [condition_identifier]
 
@@ -486,7 +486,7 @@ class SpecimenTransformer(Transformer):
         super().__init__(session)
         self.session = session
         self.project_id = 'CDA'
-        self.namespace = uuid3(NAMESPACE_DNS, 'cda.readthedocs.io')
+        self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
 
     def fhir_specimen(self, cda_specimen: CDASpecimen, patient: PatientTransformer) -> Specimen:
 
@@ -495,7 +495,7 @@ class SpecimenTransformer(Transformer):
 
         parent = None
         if cda_specimen.derived_from_specimen and cda_specimen.derived_from_specimen != "initial specimen":
-            parent_specimen_id_system = "".join(["https://cda.readthedocs.io/", "specimen"])
+            parent_specimen_id_system = "".join([f"https://{CDA_SITE}/", "specimen"])
             parent_specimen_identifier = Identifier(
                 **{'system': parent_specimen_id_system, 'value': cda_specimen.derived_from_specimen})
             parent_specimen_id = self.specimen_mintid(parent_specimen_identifier)
@@ -520,7 +520,7 @@ class SpecimenTransformer(Transformer):
                 **{
                     "coding": [
                         {
-                            "system": "https://cda.readthedocs.io/",
+                            "system": f"https://{CDA_SITE}/",
                             "code": cda_specimen.source_material_type,
                             "display": cda_specimen.source_material_type
                         }
@@ -547,7 +547,7 @@ class SpecimenTransformer(Transformer):
 
     @staticmethod
     def get_component(key, value=None, component_type=None,
-                      system="https://cda.readthedocs.io"):
+                      system=f"https://{CDA_SITE}"):
         print("SPECIMEN Component :", key, value, component_type)
         if component_type == 'string':
             value = {"valueString": value}
@@ -584,24 +584,24 @@ class SpecimenTransformer(Transformer):
         components = []
         if cda_specimen.days_to_collection:
             days_to_collection = self.get_component("days_to_collection", value=cda_specimen.days_to_collection, component_type="int",
-                          system="https://cda.readthedocs.io")
+                          system=f"https://{CDA_SITE}")
             if days_to_collection:
                 components.append(days_to_collection)
 
         if cda_specimen.specimen_type:
             specimen_type = self.get_component("specimen_type", value=cda_specimen.specimen_type, component_type="string",
-                          system="https://cda.readthedocs.io")
+                          system=f"https://{CDA_SITE}")
             if specimen_type:
                 components.append(specimen_type)
 
         if cda_specimen.primary_disease_type:
             primary_disease_type = self.get_component("primary_disease_type", value=cda_specimen.primary_disease_type, component_type="string",
-                          system="https://cda.readthedocs.io")
+                          system=f"https://{CDA_SITE}")
             if primary_disease_type:
                 components.append(primary_disease_type)
 
         if components:
-            observation_identifier = Identifier(**{'system': "https://cda.readthedocs.io/specimen_observation", 'value': _specimen_id})
+            observation_identifier = Identifier(**{'system': f"https://{CDA_SITE}/specimen_observation", 'value': _specimen_id})
             observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
 
             obs = Observation(
@@ -653,7 +653,7 @@ class SpecimenTransformer(Transformer):
                 code, display = cda_specimen.anatomical_site.split(":")
                 body_structure_included_structure.append(BodyStructureIncludedStructure(**{"structure":
                     {"coding": [{
-                        "system": "https://cda.readthedocs.io/",
+                        "system": f"https://{CDA_SITE}/",
                         "code": code.strip(),
                         "display": display.strip()
                     }]}
@@ -663,7 +663,7 @@ class SpecimenTransformer(Transformer):
                 for body_site in body_sites:
                     body_structure_included_structure.append(BodyStructureIncludedStructure(**{"structure":
                         {"coding": [{
-                            "system": "https://cda.readthedocs.io/",
+                            "system": f"https://{CDA_SITE}/",
                             "code": body_site.strip(),
                             "display": body_site.strip()
                         }]}
@@ -671,13 +671,13 @@ class SpecimenTransformer(Transformer):
             else:
                 body_structure_included_structure = [BodyStructureIncludedStructure(**{"structure":
                     {"coding": [{
-                        "system": "https://cda.readthedocs.io/",
+                        "system": f"https://{CDA_SITE}/",
                         "code": cda_specimen.anatomical_site,
                         "display": cda_specimen.anatomical_site
                     }]}
                 })]
 
-            cda_system = "".join(["https://cda.readthedocs.io", ])
+            cda_system = "".join([f"https://{CDA_SITE}", ])
             bd_identifier = Identifier(**{'system': cda_system, 'value': str(cda_specimen.anatomical_site)})
 
             body_structure = BodyStructure(
@@ -692,7 +692,7 @@ class SpecimenTransformer(Transformer):
     @staticmethod
     def specimen_identifier(cda_specimen: CDASpecimen) -> list[Identifier]:
         """CDA Specimen FHIR Identifier."""
-        specimen_id_system = "".join(["https://cda.readthedocs.io/", "specimen"])
+        specimen_id_system = "".join([f"https://{CDA_SITE}/", "specimen"])
         specimen_identifier = Identifier(**{'system': specimen_id_system, 'value': cda_specimen.id})
         return [specimen_identifier]
 
