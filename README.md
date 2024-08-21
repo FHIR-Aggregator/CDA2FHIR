@@ -43,6 +43,14 @@ cda2fhir transform
 ``` 
 
 ### Testing
+Current integration testing runs on all data and may take up to ~2hrs. 
+
 ```
 pytest -cov 
 ```
+### FHIR data validation 
+For FHIR data validation please run: 
+```
+g3t meta validate <path to data/META folder with ndjson files> 
+```
+This process may take up to 5+ minutes due to the size of current data.
