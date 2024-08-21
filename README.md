@@ -6,6 +6,7 @@
 
 Translating Cancer Data Commons (CDA) to 🔥 FHIR (Fast Healthcare Interoperability Resources) format.
 
+
 ## Usage 
 ### Installation
 
@@ -17,6 +18,9 @@ python3 -m venv venv
 pip install -e .
 ```
 ### Transform to FHIR 
+
+### Data 
+To run the transformer, please make sure CDA raw data is in ./data/raw/ directory.
 
 ``` 
 Usage: cda2fhir transform [OPTIONS]

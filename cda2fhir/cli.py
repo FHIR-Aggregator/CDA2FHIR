@@ -1,7 +1,8 @@
 from cda2fhir import cda2fhir
 import click
 import os
-
+from pathlib import Path
+import importlib.resources
 
 @click.group()
 def cli():
@@ -18,6 +19,8 @@ def cli():
 @click.option("-p", "--path", default=None,
               help="Path to save the FHIR NDJSON files. default is CDA2FHIR/data/META.")
 def transform(n_samples, n_diagnosis, save, verbose, path):
+    assert os.path.exists(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw'))), "Please make sure CDA data is in CDA2FHIR/data/raw directory before pursuing."
+
     if n_samples:
         assert int(n_samples) <= 100, "Please provide sample number less than 100"
     if n_diagnosis:
