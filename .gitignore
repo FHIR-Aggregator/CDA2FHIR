@@ -163,4 +163,12 @@ cython_debug/
 
 .DS_Store
 
+# raw data and output files
 data/*
+
+# DB
+cda2fhir/cda_data.db
+
+# test output files
+tests/fixtures/META/*
+
