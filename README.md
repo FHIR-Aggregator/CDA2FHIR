@@ -20,8 +20,7 @@ pip install -e .
 ### Transform to FHIR 
 
 ### Data 
-To run the transformer, please make sure [CDA](https://cda.readthedocs.io/en/latest/) raw data is in ./data/raw/ directory.
-Contact cancerdataaggregator @ gmail for retrieving the raw data.  
+To run the transformer, ensure that [CDA](https://cda.readthedocs.io/en/latest/) raw data is located in the ./data/raw/ directory. If you need to retrieve the raw data, please contact cancerdataaggregator @ gmail.
 
 ``` 
 Usage: cda2fhir transform [OPTIONS]
@@ -43,7 +42,7 @@ cda2fhir transform
 ``` 
 
 ### Testing
-Current integration testing runs on all data and may take up to ~2hrs. 
+Current integration testing runs on all data and may take approximately _**2 hours**_.
 
 ```
 pytest -cov 
@@ -52,5 +51,6 @@ pytest -cov
 For FHIR data validation please run: 
 ```
 g3t meta validate <path to data/META folder with ndjson files> 
+>>>> resources={'summary': {'Specimen': 715864, 'Observation': 724999, 'ResearchStudy': 423, 'BodyStructure': 180, 'Condition': 95288, 'ResearchSubject': 160662, 'Patient': 137522}}
 ```
-This process may take up to 5+ minutes due to the size of current data.
+NOTE: This process may take more than _**5 minutes**_ due to the size of the current data.
