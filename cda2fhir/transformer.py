@@ -436,6 +436,7 @@ class ConditionTransformer(Transformer):
         observation = Observation(
             **{
                 "id": observation_id,
+                "identifier": [observation_identifier],
                 "status": "final",
                 "category": [
                     {
@@ -607,6 +608,7 @@ class SpecimenTransformer(Transformer):
             obs = Observation(
                 **{
                     "id": observation_id,
+                    "identifier": [observation_identifier],
                     "status": "final",
                     "category": [
                         {
@@ -682,6 +684,7 @@ class SpecimenTransformer(Transformer):
 
             body_structure = BodyStructure(
                 **{"id": self.mint_id(identifier=bd_identifier, resource_type="BodyStructure"),
+                   "identifier": [bd_identifier],
                    "includedStructure": body_structure_included_structure,
                    "patient": {
                        "reference": f"Patient/{patient.id}"
