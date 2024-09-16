@@ -58,3 +58,36 @@ def fix_json_format(file_path):
 
     with open_func(fixed_full_path, 'wt') as fixed_file:
         fixed_file.write(fixed_content)
+
+
+def count_study_research_subjects(researchStudy_file_path, researchSubject_file_path, field, substring):
+    study_ids = set()
+    research_subject_count = 0
+
+    # find all ResearchStudies with substring in identifier or partOf field
+    with open(researchStudy_file_path, 'r') as file:
+        for line in file:
+            resource = json.loads(line)
+            if resource['resourceType'] == 'ResearchStudy':
+                if field == 'identifier':
+                    if 'identifier' in resource:
+                        identifiers = resource['identifier']
+                        if any(substring in iden.get('value', '') for iden in identifiers):
+                            study_ids.add(resource['id'])
+                if field == 'partOf':
+                    if 'partOf' in resource:
+                        partOf = resource['partOf']
+                        if any(substring in ref.get('reference', '') for ref in partOf):
+                            study_ids.add(resource['id'])
+
+    # count ResearchSubjects
+    if study_ids:
+        with open(researchSubject_file_path, 'r') as file:
+            for line in file:
+                resource = json.loads(line)
+                if resource['resourceType'] == 'ResearchSubject':
+                    if resource['study']['reference'].split('/')[-1] in study_ids:
+                        research_subject_count += 1
+
+    print(f'number of ResearchSubjects for studies with substring "{substring} is": {research_subject_count}')
+    return research_subject_count
