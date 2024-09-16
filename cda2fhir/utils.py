@@ -91,3 +91,52 @@ def count_study_research_subjects(researchStudy_file_path, researchSubject_file_
 
     print(f'number of ResearchSubjects for studies with substring "{substring} is": {research_subject_count}')
     return research_subject_count
+
+
+def count_patient_demographics(patient_path):
+    white_count = 0
+    black_count = 0
+    native_count = 0
+    hispanic_count = 0
+    not_hispanic_count = 0
+    male_count = 0
+    female_count = 0
+    deseased_count = 0
+    alive_count = 0
+
+    with open(patient_path, 'r') as file:
+        for line in file:
+            resource = json.loads(line)
+            if resource['resourceType'] == 'Patient':
+                if 'extension' in resource:
+                    for ext in resource['extension']:
+                        if 'url' in ext.keys():
+                            if ext['url'] == "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex":
+                                if ext['valueCode'] == "M":
+                                    male_count += 1
+                                elif ext['valueCode'] == "F":
+                                    female_count += 1
+                            if ext['url'] == "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race":
+                                if ext['valueString'] == 'White':
+                                    white_count += 1
+                                elif ext['valueString'] == 'Black or African American':
+                                    black_count += 1
+                                elif ext['valueString'] == 'Native Hawaiian or Other Pacific Islander':
+                                    native_count += 1
+                            if ext['url'] == "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity":
+                                if ext['valueString'] == "not hispanic or latino":
+                                    not_hispanic_count += 1
+                                elif ext['valueString'] == 'hispanic or latino':
+                                    hispanic_count += 1
+
+                if 'deseasedBoolean' in resource:
+                    if resource['deseasedBoolean']:
+                        deseased_count += 1
+                    else:
+                        alive_count += 1
+
+    print(f'number of males: {male_count} and females: {female_count} found in CDA2FHIR data.')
+    print(f'number of deseased: {male_count} and alive: {female_count} patients found in CDA2FHIR data.')
+    print(f'number of white: {white_count}, black: {black_count}, and native or pacific islander: {native_count} patients race found in CDA2FHIR data.')
+    print(f'number of hispanic: {hispanic_count} and non hispanic: {not_hispanic_count} patients ethnicity found in CDA2FHIR data.')
+
