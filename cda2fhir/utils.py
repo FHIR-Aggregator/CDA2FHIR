@@ -1,6 +1,7 @@
 import json
 import gzip
 import os
+import pandas as pd
 
 
 def is_gzipped(file_path):
@@ -139,4 +140,66 @@ def count_patient_demographics(patient_path):
     print(f'number of deseased: {male_count} and alive: {female_count} patients found in CDA2FHIR data.')
     print(f'number of white: {white_count}, black: {black_count}, and native or pacific islander: {native_count} patients race found in CDA2FHIR data.')
     print(f'number of hispanic: {hispanic_count} and non hispanic: {not_hispanic_count} patients ethnicity found in CDA2FHIR data.')
+
+
+def create_project_program_relations(path="data/raw/Identifier_maps"):
+    """combines all CDA's project's relations into a single associative table with it's associated program membership"""
+    # GDC_project_id, CDS_study_id
+    cds_gdc = pd.read_excel("data/raw/Identifier_maps/naive_CDS-GDC_project_id_map.hand_edited_to_remove_false_positives.xlsx")
+    # CDS_study_id IDC_collection_id
+    cds_idc = pd.read_excel("data/raw/Identifier_maps/naive_CDS-IDC_project_id_map.hand_edited_to_remove_false_positives.xlsx")
+    # CDS_study_id PDC_pdc_study_id
+    cds_pdc = pd.read_excel("data/raw/Identifier_maps/naive_CDS-PDC_project_id_map.hand_edited_to_remove_false_positives.xlsx")
+    # GDC_project_id IDC_collection_id
+    gdc_idc = pd.read_excel("data/raw/Identifier_maps/naive_GDC-IDC_project_id_map.hand_edited_to_remove_false_positives.xlsx")
+    # GDC_project_id PDC_pdc_study_id
+    gdc_pdc = pd.read_excel("data/raw/Identifier_maps/naive_GDC-PDC_project_id_map.hand_edited_to_remove_false_positives.xlsx")
+    # ICDC_study_id IDC_collection_id
+    icdc_idc = pd.read_excel("data/raw/Identifier_maps/naive_ICDC-IDC_project_id_map.hand_edited_to_remove_false_positives.xlsx")
+    # IDC_collection_id PDC_pdc_study_id
+    idc_pdc = pd.read_excel("data/raw/Identifier_maps/naive_IDC-PDC_project_id_map.hand_edited_to_remove_false_positives.xlsx")
+
+    # subject_project = pd.read_csv("data/raw/association_tables/subject_associated_project.tsv", sep="\t")
+    # checked membership and counts ex.
+    # subject_project[subject_project['associated_project'].isin(idc_pdc.PDC_pdc_study_id)].associated_project.unique()
+
+    cds_gdc = cds_gdc.rename(columns={'GDC_project_id': 'project_a', 'CDS_study_id': 'project_b', 'CDS_program_acronym': 'sub_program'})[['project_a', 'project_b', 'sub_program']]
+    cds_gdc['program_a'] = 'GDC'
+    cds_gdc['program_b'] = 'CDS'
+
+    cds_idc = cds_idc.rename(columns={'CDS_study_id': 'project_a', 'IDC_collection_id': 'project_b', 'CDS_program_acronym': 'sub_program'})[['project_a', 'project_b', 'sub_program']]
+    cds_idc['program_a'] = 'CDS'
+    cds_idc['program_b'] = 'IDC'
+
+    cds_pdc = cds_pdc.rename(columns={'CDS_study_id': 'project_a', 'PDC_pdc_study_id': 'project_b', 'CDS_program_acronym': 'sub_program'})[['project_a', 'project_b', 'sub_program']]
+    cds_pdc['program_a'] = 'CDS'
+    cds_pdc['program_b'] = 'PDC'
+
+    gdc_idc = gdc_idc.rename(columns={'GDC_project_id': 'project_a', 'IDC_collection_id': 'project_b', 'GDC_program_name': 'sub_program'})[['project_a', 'project_b', 'sub_program']]
+    gdc_idc['program_a'] = 'GDC'
+    gdc_idc['program_b'] = 'IDC'
+
+    gdc_pdc = gdc_pdc.rename(columns={'GDC_project_id': 'project_a', 'PDC_pdc_study_id': 'project_b', 'GDC_program_name': 'sub_program'})[['project_a', 'project_b', 'sub_program']]
+    gdc_pdc['program_a'] = 'GDC'
+    gdc_pdc['program_b'] = 'PDC'
+
+    icdc_idc = icdc_idc.rename(columns={'ICDC_study_id': 'project_a', 'IDC_collection_id': 'project_b', 'ICDC_program_acronym': 'sub_program'})[['project_a', 'project_b', 'sub_program']]
+    icdc_idc['program_a'] = 'ICDC'
+    icdc_idc['program_b'] = 'IDC'
+
+    idc_pdc = idc_pdc.rename(columns={'IDC_collection_id': 'project_a', 'PDC_pdc_study_id': 'project_b', 'GDC_program_name': 'sub_program'})[['project_a', 'project_b', 'sub_program']]
+    idc_pdc['program_a'] = 'IDC'
+    idc_pdc['program_b'] = 'PDC'
+
+    project_relations_df = pd.concat([cds_gdc, cds_idc, cds_pdc, gdc_idc, gdc_pdc, icdc_idc, idc_pdc], ignore_index=True)
+    project_relations_df.drop_duplicates(inplace=True)
+
+    if os.path.exists(path):
+        _file_name = "project_program_relations.csv"
+        file_path = os.path.join(path, _file_name)
+        project_relations_df.to_csv(file_path, index=False)
+        print(f"Successfully saved projects relations at: {file_path}")
+    else:
+        print(f"The directory '{path}' does not exist.")
+
 

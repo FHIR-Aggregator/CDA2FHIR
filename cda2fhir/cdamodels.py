@@ -220,9 +220,3 @@ class CDASubjectIdentifier(Base):
     value: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
     system: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
     field_name: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
-
-
-
-
-
-
