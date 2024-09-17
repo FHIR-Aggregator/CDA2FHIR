@@ -10,7 +10,7 @@ from sqlalchemy.engine.reflection import Inspector
 from cda2fhir.database import init_db, SessionLocal
 from cda2fhir.cdamodels import (CDASubject, CDASubjectResearchSubject, CDAResearchSubject, CDADiagnosis, \
     CDAResearchSubjectDiagnosis, CDATreatment, CDAResearchSubjectTreatment, CDASubjectAlias, CDASubjectProject, \
-    CDASpecimen, CDASubjectIdentifier, CDAResearchSubjectSpecimen, ProjectdbGap, GDCProgramdbGap)
+    CDASpecimen, CDASubjectIdentifier, CDAResearchSubjectSpecimen, ProjectdbGap, GDCProgramdbGap, CDAProjectRelation)
 
 
 def load_to_db(path, table_class, session):
@@ -135,6 +135,11 @@ def load_data():
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'dbgap_to_project' / 'zz63_all_GDC_programs_fully_case-covered_by_dbgap_studies.xlsx')),
                        GDCProgramdbGap, session)
+        # CDAProjectRelation
+        load_to_db(str(Path(importlib.resources.files(
+            'cda2fhir').parent / 'data' / 'raw' / 'Identifier_maps' / 'project_program_relations.csv')),
+                       CDAProjectRelation, session)
+
 
     finally:
         session.expire_all()

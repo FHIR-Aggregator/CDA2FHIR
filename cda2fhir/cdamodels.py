@@ -220,3 +220,13 @@ class CDASubjectIdentifier(Base):
     value: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
     system: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
     field_name: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
+
+
+class CDAProjectRelation(Base):
+    __tablename__ = 'project_relation'
+    query: QueryPropertyDescriptor = Session.query_property()
+    project_a: Mapped[str] = mapped_column(String, primary_key=True)
+    project_b: Mapped[str] = mapped_column(String, primary_key=True)
+    sub_program: Mapped[Optional[str]] = mapped_column(String)
+    program_a: Mapped[Optional[str]] = mapped_column(String)
+    program_b: Mapped[Optional[str]] = mapped_column(String)
