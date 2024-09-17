@@ -48,121 +48,125 @@ def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
 
     try:
         # Specimen and Observation and BodyStructure -----------------------------------
-        if n_samples:
-            n_samples = int(n_samples)
+        # if n_samples:
+        #     n_samples = int(n_samples)
+        #
+        #     for _ in range(n_samples):
+        #         specimens = session.execute(
+        #             select(CDASpecimen)
+        #             .order_by(func.random())
+        #             .limit(n_samples)
+        #         ).scalars().all()
+        # else:
+        #     specimens = session.query(CDASpecimen).all()
+        #
+        # assert specimens, "Specimens is not defined."
+        #
+        # if verbose:
+        #     print("===== SPECIMEN: ")
+        #     for specimen in specimens:
+        #         print(f"id: {specimen.id}, source_material_type: {specimen.source_material_type}")
+        #
+        # fhir_specimens = []
+        # specimen_bds = []
+        # for specimen in specimens:
+        #     _cda_subject = session.execute(
+        #         select(CDASubject)
+        #         .filter_by(id=specimen.derived_from_subject)
+        #     ).scalar_one_or_none()
+        #
+        #     _cda_parent_specimen = session.execute(
+        #         select(CDASpecimen)
+        #         .filter_by(id=specimen.derived_from_specimen)
+        #     ).scalar_one_or_none()
+        #
+        #     if _cda_subject:
+        #         # if subject and specimen derived from id exists in relative tables, then create the specimen
+        #         _specimen_patient = patient_transformer.transform_human_subjects([_cda_subject])
+        #         fhir_specimen = specimen_transformer.fhir_specimen(specimen, _specimen_patient[0])
+        #
+        #         if fhir_specimen:
+        #             fhir_specimens.append(fhir_specimen)
+        #
+        #             specimen_bd = specimen_transformer.specimen_body_structure(specimen, _specimen_patient[0])
+        #             if specimen_bd:
+        #                 specimen_bds.append(specimen_bd)
+        #
+        #             _specimen_obs = specimen_transformer.specimen_observation(specimen, _specimen_patient[0],
+        #                                                                       fhir_specimen.id)
+        #             if _specimen_obs:
+        #                 observations.append(_specimen_obs)
+        #
+        # if save and fhir_specimens:
+        #     fhir_specimens = {fs.id: fs for fs in fhir_specimens if
+        #                       fs}.values()  # remove duplicates should be a better way
+        #     _fhir_specimens = [orjson.loads(s.json()) for s in fhir_specimens]
+        #     fhir_ndjson(_fhir_specimens, str(meta_path / "Specimen.ndjson"))
+        #
+        #     fhir_specimen_dbs = {sbd.id: sbd for sbd in specimen_bds if
+        #                          sbd}.values()
+        #     fhir_specimen_dbs = [orjson.loads(s.json()) for s in fhir_specimen_dbs]
+        #     fhir_ndjson(fhir_specimen_dbs, str(meta_path / "BodyStructure.ndjson"))
+        #
+        # # Patient and Observation -----------------------------------
+        # subjects = session.query(CDASubject).all()
+        # if verbose:
+        #     for subject in subjects:
+        #         print(f"id: {subject.id}, species: {subject.species}, sex: {subject.sex}")
+        #
+        #     # projects = session.query(CDASubjectProject).filter_by(subject_id=subject.id).all()
+        #     # for project in projects:
+        #     #    print(f"@@@@@ Subject's associated  projects: {project.associated_project}")
+        #
+        # cda_research_subjects = session.query(CDAResearchSubject).all()
+        # if verbose:
+        #     print("==== research subjects:")
+        #     for cda_research_subject in cda_research_subjects:
+        #         print(
+        #             f"id: {cda_research_subject.id}, project: {cda_research_subject.member_of_research_project}, condition: {cda_research_subject.primary_diagnosis_condition}")
+        #
+        # subject_researchsubjects = session.query(CDASubjectResearchSubject).all()
+        # if verbose:
+        #     print("==== RELATIONS:")
+        #     for subject_researchsubject in subject_researchsubjects:
+        #         print(
+        #             f"researchsubject_id: {subject_researchsubject.researchsubject_id}, subject_id: {subject_researchsubject.subject_id}")
+        #
+        # patients = patient_transformer.transform_human_subjects(subjects)
+        # if save and patients:
+        #     patients = [orjson.loads(patient.json()) for patient in patients]
+        #     fhir_ndjson(patients, str(meta_path / "Patient.ndjson"))
+        #
+        # for subject in subjects:
+        #     if subject.cause_of_death:
+        #         patient_identifiers = patient_transformer.patient_identifier(subject)
+        #         patient_id = patient_transformer.patient_mintid(patient_identifiers[0])
+        #         obs = patient_transformer.observation_cause_of_death(subject.cause_of_death)
+        #         obs_identifier = Identifier(
+        #             **{'system': "https://cda.readthedocs.io/", 'value': "".join([patient_id, subject.cause_of_death])})
+        #         obs.id = patient_transformer.mint_id(identifier=obs_identifier, resource_type="Observation")
+        #         obs.subject = {"reference": f"Patient/{patient_id}"}
+        #         observations.append(obs)
+        #
+        # # ResearchStudy and ResearchSubject -----------------------------------
+        # subject_aliases = session.query(CDASubjectAlias).all()
+        # if verbose:
+        #     print("==== Subject Alias RELATIONS:")
+        #     for subject_alias in subject_aliases:
+        #         print(
+        #             f"subject_id: {subject_alias.subject_id}, subject_alias: {subject_alias.subject_alias}")
 
-            for _ in range(n_samples):
-                specimens = session.execute(
-                    select(CDASpecimen)
-                    .order_by(func.random())
-                    .limit(n_samples)
-                ).scalars().all()
-        else:
-            specimens = session.query(CDASpecimen).all()
-
-        assert specimens, "Specimens is not defined."
-
-        if verbose:
-            print("===== SPECIMEN: ")
-            for specimen in specimens:
-                print(f"id: {specimen.id}, source_material_type: {specimen.source_material_type}")
-
-        fhir_specimens = []
-        specimen_bds = []
-        for specimen in specimens:
-            _cda_subject = session.execute(
-                select(CDASubject)
-                .filter_by(id=specimen.derived_from_subject)
-            ).scalar_one_or_none()
-
-            _cda_parent_specimen = session.execute(
-                select(CDASpecimen)
-                .filter_by(id=specimen.derived_from_specimen)
-            ).scalar_one_or_none()
-
-            if _cda_subject:
-                # if subject and specimen derived from id exists in relative tables, then create the specimen
-                _specimen_patient = patient_transformer.transform_human_subjects([_cda_subject])
-                fhir_specimen = specimen_transformer.fhir_specimen(specimen, _specimen_patient[0])
-
-                if fhir_specimen:
-                    fhir_specimens.append(fhir_specimen)
-
-                    specimen_bd = specimen_transformer.specimen_body_structure(specimen, _specimen_patient[0])
-                    if specimen_bd:
-                        specimen_bds.append(specimen_bd)
-
-                    _specimen_obs = specimen_transformer.specimen_observation(specimen, _specimen_patient[0],
-                                                                              fhir_specimen.id)
-                    if _specimen_obs:
-                        observations.append(_specimen_obs)
-
-        if save and fhir_specimens:
-            fhir_specimens = {fs.id: fs for fs in fhir_specimens if
-                              fs}.values()  # remove duplicates should be a better way
-            _fhir_specimens = [orjson.loads(s.json()) for s in fhir_specimens]
-            fhir_ndjson(_fhir_specimens, str(meta_path / "Specimen.ndjson"))
-
-            fhir_specimen_dbs = {sbd.id: sbd for sbd in specimen_bds if
-                                 sbd}.values()
-            fhir_specimen_dbs = [orjson.loads(s.json()) for s in fhir_specimen_dbs]
-            fhir_ndjson(fhir_specimen_dbs, str(meta_path / "BodyStructure.ndjson"))
-
-        # Patient and Observation -----------------------------------
-        subjects = session.query(CDASubject).all()
-        if verbose:
-            for subject in subjects:
-                print(f"id: {subject.id}, species: {subject.species}, sex: {subject.sex}")
-
-            # projects = session.query(CDASubjectProject).filter_by(subject_id=subject.id).all()
-            # for project in projects:
-            #    print(f"@@@@@ Subject's associated  projects: {project.associated_project}")
-
-        cda_research_subjects = session.query(CDAResearchSubject).all()
-        if verbose:
-            print("==== research subjects:")
-            for cda_research_subject in cda_research_subjects:
-                print(
-                    f"id: {cda_research_subject.id}, project: {cda_research_subject.member_of_research_project}, condition: {cda_research_subject.primary_diagnosis_condition}")
-
-        subject_researchsubjects = session.query(CDASubjectResearchSubject).all()
-        if verbose:
-            print("==== RELATIONS:")
-            for subject_researchsubject in subject_researchsubjects:
-                print(
-                    f"researchsubject_id: {subject_researchsubject.researchsubject_id}, subject_id: {subject_researchsubject.subject_id}")
-
-        patients = patient_transformer.transform_human_subjects(subjects)
-        if save and patients:
-            patients = [orjson.loads(patient.json()) for patient in patients]
-            fhir_ndjson(patients, str(meta_path / "Patient.ndjson"))
-
-        for subject in subjects:
-            if subject.cause_of_death:
-                patient_identifiers = patient_transformer.patient_identifier(subject)
-                patient_id = patient_transformer.patient_mintid(patient_identifiers[0])
-                obs = patient_transformer.observation_cause_of_death(subject.cause_of_death)
-                obs_identifier = Identifier(
-                    **{'system': "https://cda.readthedocs.io/", 'value': "".join([patient_id, subject.cause_of_death])})
-                obs.id = patient_transformer.mint_id(identifier=obs_identifier, resource_type="Observation")
-                obs.subject = {"reference": f"Patient/{patient_id}"}
-                observations.append(obs)
-
-        # ResearchStudy and ResearchSubject -----------------------------------
-        subject_aliases = session.query(CDASubjectAlias).all()
-        if verbose:
-            print("==== Subject Alias RELATIONS:")
-            for subject_alias in subject_aliases:
-                print(
-                    f"subject_id: {subject_alias.subject_id}, subject_alias: {subject_alias.subject_alias}")
-
+        # .......
         subject_projects = session.query(CDASubjectProject).all()
         # print(f"found {len(subject_projects)} subject projects")
         # subjects_with_projects = session.query(CDASubject).join(CDASubjectProject).all()
+        # .......
 
         research_studies = []
         research_subjects = []
         for project in subject_projects:
+            # print("=== PROJECT: ", project.associated_project)
+            # GDC, IDC, PDC, ICDC, CDS (HTAN and CMPC)
             if project.associated_project:
                 query_research_subjects = (
                     session.query(CDAResearchSubject)
@@ -250,73 +254,74 @@ def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
         # Condition and Observation -----------------------------------
         # randomly choose N diagnosis to reduce runtime for development
         # takes ~ 2hrs for 1041360+ diagnosis records
-        if n_diagnosis:
-            n_diagnosis = int(n_diagnosis)
-
-            for _ in range(n_diagnosis):
-                diagnoses = session.execute(
-                    select(CDADiagnosis)
-                    .order_by(func.random())  # randomly select
-                    .limit(n_diagnosis)
-                ).scalars().all()
-        else:
-            diagnoses = session.query(CDADiagnosis).all()
-            if verbose:
-                print("**** diagnosis:")
-                for diagnosis in diagnoses:
-                    print(f"id: {diagnosis.id}, primary_diagnosis: {diagnosis.primary_diagnosis}")
-
-        assert diagnoses, "Diagnosis is not defined."
-
-        conditions = []
-        for diagnosis in diagnoses:
-            _subject_diagnosis = (
-                session.query(CDASubject)
-                .join(CDASubjectResearchSubject, CDASubject.id == CDASubjectResearchSubject.subject_id)
-                .join(CDAResearchSubject, CDASubjectResearchSubject.researchsubject_id == CDAResearchSubject.id)
-                .join(CDAResearchSubjectDiagnosis,
-                      CDAResearchSubject.id == CDAResearchSubjectDiagnosis.researchsubject_id)
-                .filter(CDAResearchSubjectDiagnosis.diagnosis_id == diagnosis.id)
-                .all()
-            )
-
-            if _subject_diagnosis:
-                _patient_diagnosis = patient_transformer.transform_human_subjects(_subject_diagnosis)
-                if _patient_diagnosis and _patient_diagnosis[0].id:
-                    if verbose:
-                        print(f"------- patient id for diagnosis ID {diagnosis.id} is : {_patient_diagnosis[0].id}")
-                    condition = condition_transformer.condition(diagnosis, _patient_diagnosis[0])
-                    if condition:
-                        conditions.append(condition)
-
-                        # condition stage observation
-                        if condition.stage:
-                            stage = condition.stage[0]
-                            if stage.assessment and stage.summary:
-                                _display = stage.summary.coding[0].display
-                                if _display:
-                                    observation = condition_transformer.condition_observation(diagnosis, _display,
-                                                                                              _patient_diagnosis[0],
-                                                                                              condition.id)
-                                    if observation:
-                                        observations.append(observation)
-
-        if save and conditions:
-            _conditions = {_condition.id: _condition for _condition in conditions if _condition}.values()
-            fhir_conditions = [orjson.loads(c.json()) for c in _conditions if c]
-            fhir_ndjson(fhir_conditions,  str(meta_path / "Condition.ndjson"))
-
-        if save and observations:
-            observations = {_obs.id: _obs for _obs in observations if _obs}.values()
-            patient_observations = [orjson.loads(observation.json()) for observation in observations]
-            fhir_ndjson(patient_observations,  str(meta_path / "Observation.ndjson"))
-
-        # MedicationAdministration and Medication  -----------------------------------
-        treatments = session.query(CDATreatment).all()
-        if verbose:
-            print("**** treatment:")
-            for treatment in treatments:
-                print(f"id: {treatment.id}, therapeutic_agent: {treatment.therapeutic_agent}")
+        # .......
+        # if n_diagnosis:
+        #     n_diagnosis = int(n_diagnosis)
+        #
+        #     for _ in range(n_diagnosis):
+        #         diagnoses = session.execute(
+        #             select(CDADiagnosis)
+        #             .order_by(func.random())  # randomly select
+        #             .limit(n_diagnosis)
+        #         ).scalars().all()
+        # else:
+        #     diagnoses = session.query(CDADiagnosis).all()
+        #     if verbose:
+        #         print("**** diagnosis:")
+        #         for diagnosis in diagnoses:
+        #             print(f"id: {diagnosis.id}, primary_diagnosis: {diagnosis.primary_diagnosis}")
+        #
+        # assert diagnoses, "Diagnosis is not defined."
+        #
+        # conditions = []
+        # for diagnosis in diagnoses:
+        #     _subject_diagnosis = (
+        #         session.query(CDASubject)
+        #         .join(CDASubjectResearchSubject, CDASubject.id == CDASubjectResearchSubject.subject_id)
+        #         .join(CDAResearchSubject, CDASubjectResearchSubject.researchsubject_id == CDAResearchSubject.id)
+        #         .join(CDAResearchSubjectDiagnosis,
+        #               CDAResearchSubject.id == CDAResearchSubjectDiagnosis.researchsubject_id)
+        #         .filter(CDAResearchSubjectDiagnosis.diagnosis_id == diagnosis.id)
+        #         .all()
+        #     )
+        #
+        #     if _subject_diagnosis:
+        #         _patient_diagnosis = patient_transformer.transform_human_subjects(_subject_diagnosis)
+        #         if _patient_diagnosis and _patient_diagnosis[0].id:
+        #             if verbose:
+        #                 print(f"------- patient id for diagnosis ID {diagnosis.id} is : {_patient_diagnosis[0].id}")
+        #             condition = condition_transformer.condition(diagnosis, _patient_diagnosis[0])
+        #             if condition:
+        #                 conditions.append(condition)
+        #
+        #                 # condition stage observation
+        #                 if condition.stage:
+        #                     stage = condition.stage[0]
+        #                     if stage.assessment and stage.summary:
+        #                         _display = stage.summary.coding[0].display
+        #                         if _display:
+        #                             observation = condition_transformer.condition_observation(diagnosis, _display,
+        #                                                                                       _patient_diagnosis[0],
+        #                                                                                       condition.id)
+        #                             if observation:
+        #                                 observations.append(observation)
+        #
+        # if save and conditions:
+        #     _conditions = {_condition.id: _condition for _condition in conditions if _condition}.values()
+        #     fhir_conditions = [orjson.loads(c.json()) for c in _conditions if c]
+        #     fhir_ndjson(fhir_conditions,  str(meta_path / "Condition.ndjson"))
+        #
+        # if save and observations:
+        #     observations = {_obs.id: _obs for _obs in observations if _obs}.values()
+        #     patient_observations = [orjson.loads(observation.json()) for observation in observations]
+        #     fhir_ndjson(patient_observations,  str(meta_path / "Observation.ndjson"))
+        #
+        # # MedicationAdministration and Medication  -----------------------------------
+        # treatments = session.query(CDATreatment).all()
+        # if verbose:
+        #     print("**** treatment:")
+        #     for treatment in treatments:
+        #         print(f"id: {treatment.id}, therapeutic_agent: {treatment.therapeutic_agent}")
 
     finally:
         print("****** Closing Session ******")

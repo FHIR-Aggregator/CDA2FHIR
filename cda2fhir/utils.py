@@ -199,7 +199,26 @@ def create_project_program_relations(path="data/raw/Identifier_maps"):
         file_path = os.path.join(path, _file_name)
         project_relations_df.to_csv(file_path, index=False)
         print(f"Successfully saved projects relations at: {file_path}")
+        return project_relations_df
     else:
         print(f"The directory '{path}' does not exist.")
 
 
+def initial_project_program_relations():
+    df = create_project_program_relations(path="data/raw/Identifier_maps")
+    gdc_projects = list(set(df.project_a[df.program_a.isin(['GDC'])]))
+    gdc_projects.sort()
+    _summary = pd.DataFrame(data={'project_gdc': gdc_projects})
+    # df[df.program_a.isin(['GDC'])][df.program_b.isin(['PDC'])][['project_a' , 'project_b']].shape[0]
+
+    _summary = pd.merge(_summary, df[df.program_a.isin(['GDC'])][df.program_b.isin(['PDC'])][['project_a', 'project_b']], left_on='project_gdc', right_on='project_a', how='left')[['project_gdc', 'project_b']]
+    _summary.rename(columns={'project_b': 'project_pdc'}, inplace=True)
+
+    df_idc_pdc = df[df.program_a.isin(['IDC'])][df.program_b.isin(['PDC'])]
+    df_idc_pdc.rename(columns={'project_a': 'project_idc'}, inplace=True)
+    _summary = pd.merge(_summary, df_idc_pdc, left_on='project_pdc', right_on='project_b', how='left')[['project_gdc', 'project_pdc', 'project_idc']]
+
+    df_gdc_cds = df[df.program_a.isin(['GDC'])][df.program_b.isin(['CDS'])]
+    df_gdc_cds.rename(columns={'project_b': 'project_cds'}, inplace=True)
+    _summary = pd.merge(_summary, df_gdc_cds, left_on='project_gdc', right_on='project_a', how='left')[['project_gdc', 'project_pdc', 'project_idc']]
+    pd.merge(_summary, df_gdc_cds, left_on='project_gdc', right_on='project_a', how='left')[['project_gdc', 'project_pdc', 'project_idc', 'project_cds']].to_csv("data/raw/Identifier_maps/project_program_relations_summary.csv")

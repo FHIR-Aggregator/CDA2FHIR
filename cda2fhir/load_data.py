@@ -135,11 +135,10 @@ def load_data():
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'dbgap_to_project' / 'zz63_all_GDC_programs_fully_case-covered_by_dbgap_studies.xlsx')),
                        GDCProgramdbGap, session)
-        # CDAProjectRelation
+        # if not table_exists(engine, ''):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'Identifier_maps' / 'project_program_relations.csv')),
                        CDAProjectRelation, session)
-
 
     finally:
         session.expire_all()
