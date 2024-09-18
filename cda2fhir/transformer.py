@@ -238,7 +238,6 @@ class ResearchStudyTransformer(Transformer):
     def research_study(self, project: CDASubjectProject, research_subject: CDAResearchSubject) -> ResearchStudy:
         """CDA Projects to FHIR ResearchStudy."""
         if project.associated_project:
-            # print(f"associated project: {project.associated_project}")
             rs_identifier = self.research_study_identifier(project)
             rs_id = self.research_study_mintid(rs_identifier[0])
 

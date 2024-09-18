@@ -165,23 +165,6 @@ def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
         research_studies = []
         research_subjects = []
         for project in subject_projects:
-            # GDC, IDC, PDC, ICDC, CDS (HTAN and CMPC)
-            project_name = project.associated_project
-            associated_project_programs = session.query(CDAProjectRelation).filter(
-                or_(
-                    CDAProjectRelation.project_gdc == project_name,
-                    CDAProjectRelation.project_pdc == project_name,
-                    CDAProjectRelation.project_idc == project_name,
-                    CDAProjectRelation.project_cds == project_name,
-                    CDAProjectRelation.project_icdc == project_name
-                )
-            ).all()
-
-            for _p in associated_project_programs:
-                print("===========: ", _p, "\n")
-                print("Program:", _p.program, "Sub-Program:", _p.sub_program, "GDC:", _p.project_gdc, "PDC:", _p.project_pdc,
-                      "IDC:", _p.project_idc, "CDS:", _p.project_cds, "ICDC:", _p.project_icdc)
-
             if project.associated_project:
                 query_research_subjects = (
                     session.query(CDAResearchSubject)
@@ -245,14 +228,74 @@ def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
                                     subject_alias=query_subject_alias[0].subject_alias,
                                     value=subject_id_value))
                                                         .all())
-
+                            part_of_study = []
                             for _cda_subject_identifier in _cda_subject_identifiers:
                                 _program_research_study = research_study_transformer.program_research_study(
                                     name=_cda_subject_identifier[0].system)
                                 if _program_research_study:
                                     research_studies.append(_program_research_study)
-                                    research_study.partOf = [
-                                        Reference(**{"reference": f"ResearchStudy/{_program_research_study.id}"})]
+                                    # research_study.partOf =
+                                    part_of_study.append(Reference(**{"reference": f"ResearchStudy/{_program_research_study.id}"}))
+
+                            # ResearchStudy relations
+                            # GDC <- [IDC, PDC, ICDC, CDS] and HTAN & CMPC
+                            project_name = project.associated_project
+                            associated_project_programs = session.query(CDAProjectRelation).filter(
+                                or_(
+                                    CDAProjectRelation.project_gdc == project_name,
+                                    CDAProjectRelation.project_pdc == project_name,
+                                    CDAProjectRelation.project_idc == project_name,
+                                    CDAProjectRelation.project_cds == project_name,
+                                    CDAProjectRelation.project_icdc == project_name
+                                )
+                            ).all()
+
+                            for _p in associated_project_programs:
+                                print("===========: ", _p, "\n")
+                                _p_name = None
+                                if _p.project_gdc == project_name:
+                                    _p_name = 'GDC'
+                                elif _p.project_pdc == project_name:
+                                    _p_name = 'PDC'
+                                elif _p.project_idc == project_name:
+                                    _p_name = 'IDC'
+                                elif _p.project_cds == project_name:
+                                    _p_name = 'CDS'
+                                elif _p.project_icdc == project_name:
+                                    _p_name = 'ICDC'
+
+                                print("Program:", _p.program, "Sub-Program:", _p.sub_program, "GDC:", _p.project_gdc,
+                                      "PDC:", _p.project_pdc,
+                                      "IDC:", _p.project_idc, "CDS:", _p.project_cds, "ICDC:", _p.project_icdc,
+                                      "program_project_match:", _p_name)
+
+                                if _p.program:
+                                    parent_program = research_study_transformer.program_research_study(
+                                        name=_p.program)
+                                    part_of_study = [p for p in part_of_study if p.reference not in f"ResearchStudy/{parent_program.id}"]
+                                    part_of_study.append(Reference(**{"reference": f"ResearchStudy/{parent_program.id}"}))
+
+                                if _p_name:
+                                    main_program = research_study_transformer.program_research_study(
+                                        name=_p_name)
+                                    part_of_study = [p for p in part_of_study if p.reference not in f"ResearchStudy/{main_program.id}"]
+                                    part_of_study.append(Reference(**{"reference": f"ResearchStudy/{main_program.id}"}))
+
+                                if _p.sub_program:
+                                    parent_sub_program = research_study_transformer.program_research_study(
+                                        name=_p.sub_program)
+                                    part_of_study = [p for p in part_of_study if p.reference not in f"ResearchStudy/{parent_sub_program.id}"]
+                                    part_of_study.append(Reference(**{"reference": f"ResearchStudy/{parent_sub_program.id}"}))
+
+                            if part_of_study:
+                                research_study.partOf = part_of_study
+
+                            # _program_research_study = research_study_transformer.program_research_study(
+                            #    name=_cda_subject_identifier[0].system)
+                            #if _program_research_study:
+                            #    research_studies.append(_program_research_study)
+                            #    research_study.partOf = [
+                            #        Reference(**{"reference": f"ResearchStudy/{_program_research_study.id}"})]
 
         if save and research_studies:
             research_studies = {rstudy.id: rstudy for rstudy in research_studies if
