@@ -1,5 +1,5 @@
 from typing import Optional, List
-from sqlalchemy import ForeignKey, Integer, String, create_engine
+from sqlalchemy import ForeignKey, Integer, String, create_engine, PrimaryKeyConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase, QueryPropertyDescriptor
 from sqlalchemy.orm import sessionmaker, scoped_session
 from pathlib import Path
@@ -223,10 +223,18 @@ class CDASubjectIdentifier(Base):
 
 
 class CDAProjectRelation(Base):
-    __tablename__ = 'project_relation'
+    __tablename__ = 'project_program_relation'
     query: QueryPropertyDescriptor = Session.query_property()
-    project_a: Mapped[str] = mapped_column(String, primary_key=True)
-    project_b: Mapped[str] = mapped_column(String, primary_key=True)
-    sub_program: Mapped[Optional[str]] = mapped_column(String)
-    program_a: Mapped[Optional[str]] = mapped_column(String)
-    program_b: Mapped[Optional[str]] = mapped_column(String)
+    # id = mapped_column(Integer, primary_key=True)
+    program: Mapped[Optional[str]] = mapped_column(String)
+    sub_program: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    project_gdc: Mapped[str] = mapped_column(String, nullable=True)
+    project_pdc: Mapped[str] = mapped_column(String, nullable=True)
+    project_idc: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    project_cds: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    project_icdc: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    __table_args__ = (
+        PrimaryKeyConstraint('project_gdc', 'project_pdc', 'project_idc',
+                             'project_cds', 'project_icdc', 'sub_program', 'program'),
+    )

@@ -8,10 +8,10 @@ from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, \
     CDASubjectAlias, CDASubjectProject, CDAResearchSubjectDiagnosis, CDASpecimen, ProjectdbGap, GDCProgramdbGap, \
-    CDASubjectIdentifier
+    CDASubjectIdentifier, CDAProjectRelation
 from cda2fhir.transformer import PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer, \
     ConditionTransformer, SpecimenTransformer
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 
 gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDERS', 'FM', 'HCMI', 'MMRF', 'NCICCR', 'OHSU', 'ORGANOID', 'REBC', 'TARGET', 'TCGA', 'TRIO', 'VAREPOP', 'WCDT']
 
@@ -165,8 +165,23 @@ def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
         research_studies = []
         research_subjects = []
         for project in subject_projects:
-            # print("=== PROJECT: ", project.associated_project)
             # GDC, IDC, PDC, ICDC, CDS (HTAN and CMPC)
+            project_name = project.associated_project
+            associated_project_programs = session.query(CDAProjectRelation).filter(
+                or_(
+                    CDAProjectRelation.project_gdc == project_name,
+                    CDAProjectRelation.project_pdc == project_name,
+                    CDAProjectRelation.project_idc == project_name,
+                    CDAProjectRelation.project_cds == project_name,
+                    CDAProjectRelation.project_icdc == project_name
+                )
+            ).all()
+
+            for _p in associated_project_programs:
+                print("===========: ", _p, "\n")
+                print("Program:", _p.program, "Sub-Program:", _p.sub_program, "GDC:", _p.project_gdc, "PDC:", _p.project_pdc,
+                      "IDC:", _p.project_idc, "CDS:", _p.project_cds, "ICDC:", _p.project_icdc)
+
             if project.associated_project:
                 query_research_subjects = (
                     session.query(CDAResearchSubject)
