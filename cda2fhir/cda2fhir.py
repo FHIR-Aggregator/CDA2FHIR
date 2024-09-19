@@ -200,7 +200,6 @@ def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
                         research_study.identifier.append(dbGap_identifier)
 
                     if research_study:
-                        research_studies.append(research_study)
                         if _patient and research_study:
                             _research_subject = research_subject_transformer.research_subject(cda_rs_subject,
                                                                                               _patient[0],
@@ -272,21 +271,26 @@ def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
                                         name=_p.program)
                                     part_of_study = [p for p in part_of_study if p.reference not in f"ResearchStudy/{parent_program.id}"]
                                     part_of_study.append(Reference(**{"reference": f"ResearchStudy/{parent_program.id}"}))
+                                    research_studies.append(parent_program)
 
                                 if _p_name:
                                     main_program = research_study_transformer.program_research_study(
                                         name=_p_name)
                                     part_of_study = [p for p in part_of_study if p.reference not in f"ResearchStudy/{main_program.id}"]
                                     part_of_study.append(Reference(**{"reference": f"ResearchStudy/{main_program.id}"}))
+                                    research_studies.append(main_program)
 
                                 if _p.sub_program:
                                     parent_sub_program = research_study_transformer.program_research_study(
                                         name=_p.sub_program)
                                     part_of_study = [p for p in part_of_study if p.reference not in f"ResearchStudy/{parent_sub_program.id}"]
                                     part_of_study.append(Reference(**{"reference": f"ResearchStudy/{parent_sub_program.id}"}))
+                                    research_studies.append(parent_sub_program)
 
                             if part_of_study:
                                 research_study.partOf = part_of_study
+
+                        research_studies.append(research_study)
 
         if save and research_studies:
             research_studies = {rstudy.id: rstudy for rstudy in research_studies if
