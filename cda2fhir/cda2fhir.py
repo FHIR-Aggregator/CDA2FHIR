@@ -402,9 +402,32 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
 
         assert files, "Files are not defined."
 
-        # for file in files:
-            # file_transformer.fhir_document_reference(file, file_patients, file_specimens)
-        
+        for file in files:
+            # _file_subjects = session.execute(
+            #     select(CDAFileSubject)
+            #     .filter_by(id=file.id)
+            # ).all()
+            # _file_subjects_ids = [s.subject_id for s in _file_subjects]
+            #
+            # _file_specimens = session.execute(
+            #     select(CDAFileSpecimen)
+            #     .filter_by(id=file.id)
+            # ).all()
+            # _file_specimens_ids = [s.specimen_id for s in _file_specimens]
+            _file_subjects_ids = ["1234"]
+            _file_specimens_ids = ["3456"]
+
+            fhir_file = file_transformer.fhir_document_reference(file, _file_subjects_ids, _file_specimens_ids)
+            if save and fhir_file["DocumentReference"]:
+                document_references = {_doc_ref.id: _doc_ref for _doc_ref in fhir_file["DocumentReference"] if _doc_ref}.values()
+                fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in document_references]
+                fhir_ndjson(fhir_document_references, str(meta_path / "DocumentReference.ndjson"))
+
+            if save and fhir_file["Group"]:
+                groups = {_g.id: _g for _g in fhir_file["group"] if _g}.values()
+                fhir_groups = [orjson.loads(group.json()) for group in groups]
+                fhir_ndjson(fhir_groups, str(meta_path / "Group.ndjson"))
+
     finally:
         print("****** Closing Session ******")
         session.close()

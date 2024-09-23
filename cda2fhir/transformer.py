@@ -720,13 +720,14 @@ class DocumentReferenceTransformer(Transformer):
         self.project_id = 'CDA'
         self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
 
-    def fhir_document_reference(self, cda_file: CDAFile, patients: list, specimens: list) -> DocumentReference:
+    def fhir_document_reference(self, cda_file: CDAFile, patients: list, specimens: list) -> dict:
 
         category = []
         subject_reference = None
         based_on = None
         _type = None
         category = []
+        group = None
 
         _doc_ref_identifier = Identifier(
             **{"system": "".join([f"https://{CDA_SITE}/", "system"]), "value": cda_file.id})
@@ -807,7 +808,7 @@ class DocumentReferenceTransformer(Transformer):
                 }
             ]
         })
-        return doc_ref
+        return {"DocumentReference": doc_ref, "Group": group}
 
     def fhir_attachment(self, cda_file: CDAFile) -> Attachment:
         attachment = Attachment(**{
