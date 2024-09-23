@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.engine.reflection import Inspector
 from cda2fhir.database import init_db, SessionLocal
-from cda2fhir.cdamodels import (CDASubject, CDASubjectResearchSubject, CDAResearchSubject, CDADiagnosis, \
-    CDAResearchSubjectDiagnosis, CDATreatment, CDAResearchSubjectTreatment, CDASubjectAlias, CDASubjectProject, \
-    CDASpecimen, CDASubjectIdentifier, CDAResearchSubjectSpecimen, ProjectdbGap, GDCProgramdbGap, CDAProjectRelation)
+from cda2fhir.cdamodels import (CDASubject, CDASubjectResearchSubject, CDAResearchSubject, CDADiagnosis,
+                                CDAResearchSubjectDiagnosis, CDATreatment, CDAResearchSubjectTreatment, CDASubjectAlias,
+                                CDASubjectProject,  CDASpecimen, CDASubjectIdentifier, CDAResearchSubjectSpecimen,
+                                ProjectdbGap, GDCProgramdbGap, CDAProjectRelation, CDAFile, CDAFileSpecimen, CDAFileSubject)
 
 
 def load_to_db(path, table_class, session):
@@ -81,11 +82,10 @@ def load_data():
     clear_table(GDCProgramdbGap, session)
     clear_table(CDASubjectIdentifier, session)
 
-
     try:
         # if not table_exists(engine, 'subject'): #TODO: add when relations and tables are defined
         load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'subject.json')),
-                        CDASubject, session)
+                   CDASubject, session)
         # if not table_exists(engine, 'researchsubject'):
         load_to_db(
             str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'researchsubject.json')),
@@ -97,48 +97,59 @@ def load_data():
         # if not table_exists(engine, 'subject_researchsubject'):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_researchsubject.tsv')),
-                       CDASubjectResearchSubject, session)
+                   CDASubjectResearchSubject, session)
         # if not table_exists(engine, 'diagnosis'):
         load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'diagnosis.json')),
-                        CDADiagnosis, session)
+                   CDADiagnosis, session)
         # if not table_exists(engine, 'treatment'):
         load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'treatment.json')),
-                        CDATreatment, session)
+                   CDATreatment, session)
         # if not table_exists(engine, 'researchsubject_diagnosis'):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_diagnosis.tsv')),
-                       CDAResearchSubjectDiagnosis, session)
+                   CDAResearchSubjectDiagnosis, session)
         # if not table_exists(engine, 'researchsubject_treatment'):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_treatment.tsv')),
-                       CDAResearchSubjectTreatment, session)
+                   CDAResearchSubjectTreatment, session)
         # if not table_exists(engine, 'subject_alias_table'):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'alias_files' / 'subject_integer_aliases.tsv')), CDASubjectAlias,
-                       session)
+                   session)
         # if not table_exists(engine, 'subject_project'):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_associated_project.tsv')),
-                       CDASubjectProject, session)
+                   CDASubjectProject, session)
         # if not table_exists(engine, 'specimen'):
         load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'specimen.json')),
-                        CDASpecimen, session)
+                   CDASpecimen, session)
         # if not table_exists(engine, 'researchsubject_specimen'):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_specimen.tsv')),
-                       CDAResearchSubjectSpecimen, session)
+                   CDAResearchSubjectSpecimen, session)
         # if not table_exists(engine, ''):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'dbgap_to_project' / 'zz61_all_GDC_projects_fully_case-covered_by_dbgap_studies.xlsx')),
-                       ProjectdbGap, session)
+                   ProjectdbGap, session)
         # if not table_exists(engine, ''):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'dbgap_to_project' / 'zz63_all_GDC_programs_fully_case-covered_by_dbgap_studies.xlsx')),
-                       GDCProgramdbGap, session)
+                   GDCProgramdbGap, session)
         # if not table_exists(engine, ''):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'Identifier_maps' / 'project_program_relation_summary.csv')),
-                       CDAProjectRelation, session)
+                   CDAProjectRelation, session)
+        # if not table_exists(engine, ''):
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_reduced.json')),
+                   CDAFile, session)
+        # if not table_exists(engine, ''):
+        load_to_db(str(Path(importlib.resources.files(
+            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_subject.tsv')),
+                   CDAFileSubject, session)
+        # if not table_exists(engine, ''):
+        load_to_db(str(Path(importlib.resources.files(
+            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_specimen.tsv')),
+                   CDAFileSpecimen, session)
 
     finally:
         session.expire_all()

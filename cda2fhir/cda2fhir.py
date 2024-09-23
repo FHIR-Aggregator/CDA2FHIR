@@ -8,9 +8,9 @@ from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, \
     CDASubjectAlias, CDASubjectProject, CDAResearchSubjectDiagnosis, CDASpecimen, ProjectdbGap, GDCProgramdbGap, \
-    CDASubjectIdentifier, CDAProjectRelation
+    CDASubjectIdentifier, CDAProjectRelation, CDAFile, CDAFileSubject, CDAFileSpecimen
 from cda2fhir.transformer import PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer, \
-    ConditionTransformer, SpecimenTransformer
+    ConditionTransformer, SpecimenTransformer, DocumentReferenceTransformer
 from sqlalchemy import select, func, or_
 
 gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDERS', 'FM', 'HCMI', 'MMRF', 'NCICCR', 'OHSU', 'ORGANOID', 'REBC', 'TARGET', 'TCGA', 'TRIO', 'VAREPOP', 'WCDT']
@@ -25,7 +25,7 @@ def fhir_ndjson(entity, out_path):
             file.write(json.dumps(entity, ensure_ascii=False))
 
 
-def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
+def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
     """CDA2FHIR attempts to transform the baseclass definitions of CDA data defined in cdamodels to query relevant
     information to create FHIR entities: Specimen, ResearchSubject,
     ResearchStudy, Condition, BodyStructure, Observation utilizing transfomer classes."""
@@ -37,6 +37,8 @@ def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
     research_subject_transformer = ResearchSubjectTransformer(session)
     condition_transformer = ConditionTransformer(session)
     specimen_transformer = SpecimenTransformer(session)
+    file_transformer = DocumentReferenceTransformer(session)
+
 
     if path:
         meta_path = Path(path)
@@ -375,6 +377,34 @@ def cda2fhir(path, n_samples, n_diagnosis, save=True, verbose=False):
             for treatment in treatments:
                 print(f"id: {treatment.id}, therapeutic_agent: {treatment.therapeutic_agent}")
 
+        # File  -----------------------------------
+        # large record set -> 30+ GB takes time
+        if n_files:
+            n_files = int(n_files)
+            files = None
+            for _ in range(n_files):
+                files = session.execute(
+                    select(CDAFile)
+                    .order_by(func.random())  # randomly select
+                    .limit(n_files)
+                ).scalars().all()
+
+            if verbose:
+                print("**** files:")
+                for file in files:
+                    print(f"id: {file.id}, drs_uri: {file.drs_uri}")
+        else:
+            files = session.query(CDAFile).all()
+            if verbose:
+                print("**** files:")
+                for file in files:
+                    print(f"id: {file.id}, drs_uri: {file.drs_uri}")
+
+        assert files, "Files are not defined."
+
+        # for file in files:
+            # file_transformer.fhir_document_reference(file, file_patients, file_specimens)
+        
     finally:
         print("****** Closing Session ******")
         session.close()

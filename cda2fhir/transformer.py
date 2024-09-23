@@ -5,6 +5,9 @@ from fhir.resources.identifier import Identifier
 from fhir.resources.extension import Extension
 from fhir.resources.observation import Observation
 from fhir.resources.researchstudy import ResearchStudy
+from fhir.resources.documentreference import DocumentReference
+from fhir.resources.group import Group, GroupMember
+from fhir.resources.attachment import Attachment
 from fhir.resources.bodystructure import BodyStructure, BodyStructureIncludedStructure
 from fhir.resources.researchsubject import ResearchSubject
 from fhir.resources.codeableconcept import CodeableConcept
@@ -13,10 +16,12 @@ from fhir.resources.codeablereference import CodeableReference
 from fhir.resources.condition import Condition, ConditionStage
 from sqlalchemy.orm import Session
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject, \
-    CDADiagnosis, CDASpecimen
+    CDADiagnosis, CDASpecimen, CDAFile
 from uuid import uuid3, uuid5, NAMESPACE_DNS
 
 CDA_SITE = 'cda.readthedocs.io'
+
+
 class Transformer:
     def __init__(self, session: Session):
         self.session = session
@@ -508,7 +513,7 @@ class SpecimenTransformer(Transformer):
         if fhir_bodysite:
             collection = SpecimenCollection(
                 **{
-                    "bodySite": CodeableReference(** {"reference": Reference(**{
+                    "bodySite": CodeableReference(**{"reference": Reference(**{
                         "reference": f"BodyStructure/{fhir_bodysite.id}"
                     })})
                 })
@@ -583,25 +588,29 @@ class SpecimenTransformer(Transformer):
     def specimen_observation(self, cda_specimen, patient, _specimen_id) -> Observation:
         components = []
         if cda_specimen.days_to_collection:
-            days_to_collection = self.get_component("days_to_collection", value=cda_specimen.days_to_collection, component_type="int",
-                          system=f"https://{CDA_SITE}")
+            days_to_collection = self.get_component("days_to_collection", value=cda_specimen.days_to_collection,
+                                                    component_type="int",
+                                                    system=f"https://{CDA_SITE}")
             if days_to_collection:
                 components.append(days_to_collection)
 
         if cda_specimen.specimen_type:
-            specimen_type = self.get_component("specimen_type", value=cda_specimen.specimen_type, component_type="string",
-                          system=f"https://{CDA_SITE}")
+            specimen_type = self.get_component("specimen_type", value=cda_specimen.specimen_type,
+                                               component_type="string",
+                                               system=f"https://{CDA_SITE}")
             if specimen_type:
                 components.append(specimen_type)
 
         if cda_specimen.primary_disease_type:
-            primary_disease_type = self.get_component("primary_disease_type", value=cda_specimen.primary_disease_type, component_type="string",
-                          system=f"https://{CDA_SITE}")
+            primary_disease_type = self.get_component("primary_disease_type", value=cda_specimen.primary_disease_type,
+                                                      component_type="string",
+                                                      system=f"https://{CDA_SITE}")
             if primary_disease_type:
                 components.append(primary_disease_type)
 
         if components:
-            observation_identifier = Identifier(**{'system': f"https://{CDA_SITE}/specimen_observation", 'value': _specimen_id})
+            observation_identifier = Identifier(
+                **{'system': f"https://{CDA_SITE}/specimen_observation", 'value': _specimen_id})
             observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
 
             obs = Observation(
@@ -625,7 +634,8 @@ class SpecimenTransformer(Transformer):
                             {
                                 "system": "http://loinc.org",
                                 "code": "81247-9",
-                                "display": "Master HL7 genetic variant reporting panel" # TODO: check specimen related codes
+                                "display": "Master HL7 genetic variant reporting panel"
+                                # TODO: check specimen related codes
                             }
                         ]
                     },
@@ -701,3 +711,117 @@ class SpecimenTransformer(Transformer):
     def specimen_mintid(self, specimen_identifier: Identifier) -> str:
         """CDA Specimen FHIR Mint ID."""
         return self.mint_id(identifier=specimen_identifier, resource_type="Specimen")
+
+
+class DocumentReferenceTransformer(Transformer):
+    def __init__(self, session: Session):
+        super().__init__(session)
+        self.session = session
+        self.project_id = 'CDA'
+        self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
+
+    def fhir_document_reference(self, cda_file: CDAFile, patients: list, specimens: list) -> DocumentReference:
+
+        category = []
+        subject_reference = None
+        based_on = None
+        _type = None
+        category = []
+
+        _doc_ref_identifier = Identifier(
+            **{"system": "".join([f"https://{CDA_SITE}/", "system"]), "value": cda_file.id})
+        _doc_ref_alias_identifier = Identifier(
+            **{"system": "".join([f"https://{CDA_SITE}/", "alias"]), "value": str(cda_file.integer_id_alias)})
+        _doc_ref_dbgap_identifier = Identifier(
+            **{"system": "".join([f"https://{CDA_SITE}/", "dbgap_accession_number"]), "value": cda_file.dbgap_accession_number})
+
+        _doc_ref_id = self.mint_id(identifier=_doc_ref_identifier, resource_type="DocumentReference")
+        if patients and len(patients) == 1:
+            subject_reference = Reference(**{"reference": f"Patient/{patients[0]}"})
+        else:
+            group = self.fhir_group(member_ids=patients, _type="patient", _identifier=_doc_ref_identifier)
+            subject_reference = Reference(**{"reference": "/".join(["Group", group.id])})
+
+        if specimens:
+            based_on = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimens]
+
+        if cda_file.file_format:
+            _type = CodeableConcept(**{"coding":
+                                           [{"system": "".join([f"https://{CDA_SITE}/", "system"]),
+                                             "code": cda_file.file_format,
+                                             "display": cda_file.file_format}]
+                                       })
+
+        if cda_file.data_category:
+            category.append(CodeableConcept(**{"coding": [{
+                "system": "".join([f"https://{CDA_SITE}/", "data_category"]),
+                "code": cda_file.data_category,
+                "display": cda_file.data_category}]
+            }))
+        if cda_file.data_type:
+            category.append(CodeableConcept(**{"coding": [{
+                "system": "".join([f"https://{CDA_SITE}/", "data_type"]),
+                "code": cda_file.data_type,
+                "display": cda_file.data_type}]
+            }))
+        if cda_file.data_modality:
+            category.append(CodeableConcept(**{"coding": [{
+                "system": "".join([f"https://{CDA_SITE}/", "data_modality"]),
+                "code": cda_file.data_modality,
+                "display": cda_file.data_modality}]
+            }))
+        if cda_file.imaging_modality:
+            category.append(CodeableConcept(**{"coding": [{
+                "system": "".join([f"https://{CDA_SITE}/", "imaging_modality"]),
+                "code": cda_file.imaging_modality,
+                "display": cda_file.imaging_modality}]
+            }))
+        if cda_file.imaging_series:
+            category.append(CodeableConcept(**{"coding": [{
+                "system": "".join([f"https://{CDA_SITE}/", "imaging_series"]),
+                "code": cda_file.imaging_series,
+                "display": cda_file.imaging_series}]
+            }))
+
+        doc_ref = DocumentReference(**{
+            "id": _doc_ref_id,
+            "identifier": [_doc_ref_identifier, _doc_ref_dbgap_identifier, _doc_ref_alias_identifier],
+            "status": "current",
+            "version": "1",
+            "subject": subject_reference,
+            "basedOn": based_on,
+            "type": _type,
+            "category": category,
+            "content": [
+                {
+                    "attachment": self.fhir_attachment(cda_file),
+                    "profile": [
+                        {
+                            "valueCoding": {
+                                "system": "".join([f"https://{CDA_SITE}/", "file_format"]),
+                                "code": cda_file.file_format,
+                                "display": cda_file.file_format
+                            }
+                        }
+                    ]
+                }
+            ]
+        })
+        return doc_ref
+
+    def fhir_attachment(self, cda_file: CDAFile) -> Attachment:
+        attachment = Attachment(**{
+            "contentType": cda_file.data_type,
+            "title": cda_file.label,
+            "url": cda_file.drs_uri,
+            "size": cda_file.byte_size,
+            "hash": cda_file.checksum
+        })
+        return attachment
+
+    def fhir_group(self, member_ids: list, _type: str, _identifier: Identifier) -> Group:
+        _members = [GroupMember(**{'entity': m}) for m in member_ids]
+        group_id = self.mint_id(identifier="_".join([_identifier, _type]), resource_type="Group")
+        group = Group(**{'id': group_id, "identifier": _identifier, "membership": 'definitional',
+                         'member': _members, "type": _type})
+        return group

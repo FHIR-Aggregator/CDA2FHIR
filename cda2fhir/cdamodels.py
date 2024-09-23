@@ -38,6 +38,9 @@ class CDASubject(Base):
     subject_project_relation: Mapped[List["CDASubjectProject"]] = relationship(
         back_populates="subject"
     )
+    subject_file_relation: Mapped[List["CDAFileSubject"]] = relationship(
+        back_populates="subject"
+    )
 
     @property
     def alias_id(self):
@@ -179,6 +182,9 @@ class CDASpecimen(Base):
     researchsubject_specimens: Mapped[List["CDAResearchSubjectSpecimen"]] = relationship(
         back_populates="specimen"
     )
+    file_specimen_relation: Mapped[List["CDAFileSpecimen"]] = relationship(
+        back_populates="specimen"
+    )
 
 
 class CDAResearchSubjectSpecimen(Base):
@@ -238,3 +244,54 @@ class CDAProjectRelation(Base):
         PrimaryKeyConstraint('project_gdc', 'project_pdc', 'project_idc',
                              'project_cds', 'project_icdc', 'sub_program', 'program'),
     )
+
+
+class CDAFile(Base):
+    __tablename__ = 'cda_file'
+    query: QueryPropertyDescriptor = Session.query_property()
+    id: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
+    label: Mapped[Optional[str]] = mapped_column(String)
+    data_category: Mapped[Optional[str]] = mapped_column(String)
+    data_type: Mapped[Optional[str]] = mapped_column(String)
+    file_format: Mapped[Optional[str]] = mapped_column(String)
+    drs_uri: Mapped[Optional[str]] = mapped_column(String)
+    byte_size: Mapped[Optional[int]] = mapped_column(Integer)
+    checksum: Mapped[Optional[str]] = mapped_column(String)
+    data_modality: Mapped[Optional[str]] = mapped_column(String)
+    imaging_modality: Mapped[Optional[str]] = mapped_column(String)
+    dbgap_accession_number: Mapped[Optional[str]] = mapped_column(String)
+    imaging_series: Mapped[Optional[str]] = mapped_column(String)
+    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer)
+    specimen_file_relation: Mapped[List["CDAFileSpecimen"]] = relationship(
+        back_populates="file"
+    )
+    file_subject_relation: Mapped[List["CDAFileSubject"]] = relationship(
+        back_populates="file"
+    )
+
+
+class CDAFileSubject(Base):
+    __tablename__ = 'file_subject'
+    query: QueryPropertyDescriptor = Session.query_property()
+    file_id: Mapped[str] = mapped_column(ForeignKey("cda_file.id"), primary_key=True)
+    subject_id: Mapped[str] = mapped_column(ForeignKey("subject.id"), primary_key=True)
+    subject: Mapped["CDASubject"] = relationship(
+        back_populates="subject_file_relation"
+    )
+    file: Mapped["CDAFile"] = relationship(
+        back_populates="file_subject_relation"
+    )
+
+
+class CDAFileSpecimen(Base):
+    __tablename__ = 'file_specimen'
+    query: QueryPropertyDescriptor = Session.query_property()
+    file_id: Mapped[str] = mapped_column(ForeignKey("cda_file.id"), primary_key=True)
+    specimen_id: Mapped[str] = mapped_column(ForeignKey("specimen.id"), primary_key=True)
+    specimen: Mapped["CDASpecimen"] = relationship(
+        back_populates="file_specimen_relation"
+    )
+    file: Mapped["CDAFile"] = relationship(
+        back_populates="specimen_file_relation"
+    )
+
