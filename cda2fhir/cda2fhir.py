@@ -12,6 +12,8 @@ from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearc
 from cda2fhir.transformer import PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer, \
     ConditionTransformer, SpecimenTransformer, DocumentReferenceTransformer
 from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload
+
 
 gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDERS', 'FM', 'HCMI', 'MMRF', 'NCICCR', 'OHSU', 'ORGANOID', 'REBC', 'TARGET', 'TCGA', 'TRIO', 'VAREPOP', 'WCDT']
 
@@ -381,46 +383,37 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
         # large record set -> 30+ GB takes time
         if n_files:
             n_files = int(n_files)
-            files = None
-            for _ in range(n_files):
-                files = session.execute(
-                    select(CDAFile)
-                    .order_by(func.random())  # randomly select
-                    .limit(n_files)
-                ).scalars().all()
-
-            if verbose:
-                print("**** files:")
-                for file in files:
-                    print(f"id: {file.id}, drs_uri: {file.drs_uri}")
+            files = session.execute(
+                select(CDAFile)
+                .order_by(func.random())
+                .limit(n_files)
+                .options(
+                    selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
+                    selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen)
+                )
+            ).scalars().all()
         else:
-            files = session.query(CDAFile).all()
-            if verbose:
-                print("**** files:")
-                for file in files:
-                    print(f"id: {file.id}, drs_uri: {file.drs_uri}")
+            files = session.query(CDAFile).options(
+                selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
+                selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen)
+            ).all()
 
         assert files, "Files are not defined."
 
         for file in files:
-            # _file_subjects = session.execute(
-            #     select(CDAFileSubject)
-            #     .filter_by(id=file.id)
-            # ).all()
-            # _file_subjects_ids = [s.subject_id for s in _file_subjects]
-            #
-            # _file_specimens = session.execute(
-            #     select(CDAFileSpecimen)
-            #     .filter_by(id=file.id)
-            # ).all()
-            # _file_specimens_ids = [s.specimen_id for s in _file_specimens]
-            _file_subjects_ids = ["1234"]
-            _file_specimens_ids = ["3456"]
+            print(f"File ID: {file.id}, File DRS URI: {file.drs_uri}")
+            _file_subject_ids = [file_subject.subject_id for file_subject in file.file_subject_relation]
+            print(f"++++++++++++++ FILE's SUBJECTS: {_file_subject_ids}")
+            _file_specimen_ids = [file_specimen.specimen_id for file_specimen in file.specimen_file_relation]
+            print(f"+++++++++++++ FILE's  SPECIMENS: {_file_specimen_ids}")
 
-            fhir_file = file_transformer.fhir_document_reference(file, _file_subjects_ids, _file_specimens_ids)
+            fhir_file = file_transformer.fhir_document_reference(file, _file_subject_ids, _file_specimen_ids)
+            print("fhir_file DocumentReference: ", fhir_file["DocumentReference"], type(fhir_file["DocumentReference"]))
             if save and fhir_file["DocumentReference"]:
-                document_references = {_doc_ref.id: _doc_ref for _doc_ref in fhir_file["DocumentReference"] if _doc_ref}.values()
-                fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in document_references]
+                document_references = {_doc_ref.id: _doc_ref for _doc_ref in fhir_file["DocumentReference"] if
+                                       _doc_ref}.values()
+                fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in
+                                            document_references]
                 fhir_ndjson(fhir_document_references, str(meta_path / "DocumentReference.ndjson"))
 
             if save and fhir_file["Group"]:

@@ -798,11 +798,7 @@ class DocumentReferenceTransformer(Transformer):
                     "attachment": self.fhir_attachment(cda_file),
                     "profile": [
                         {
-                            "valueCoding": {
-                                "system": "".join([f"https://{CDA_SITE}/", "file_format"]),
-                                "code": cda_file.file_format,
-                                "display": cda_file.file_format
-                            }
+                            "valueUri": cda_file.drs_uri
                         }
                     ]
                 }
@@ -814,7 +810,6 @@ class DocumentReferenceTransformer(Transformer):
         attachment = Attachment(**{
             "contentType": cda_file.data_type,
             "title": cda_file.label,
-            "url": cda_file.drs_uri,
             "size": cda_file.byte_size,
             "hash": cda_file.checksum
         })
