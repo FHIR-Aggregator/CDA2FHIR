@@ -4,6 +4,8 @@ from pathlib import Path
 import importlib.resources
 from fhir.resources.identifier import Identifier
 from fhir.resources.reference import Reference
+from fhir.resources.documentreference import DocumentReference
+from fhir.resources.group import Group
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, \
@@ -14,8 +16,8 @@ from cda2fhir.transformer import PatientTransformer, ResearchStudyTransformer, R
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 
-
-gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDERS', 'FM', 'HCMI', 'MMRF', 'NCICCR', 'OHSU', 'ORGANOID', 'REBC', 'TARGET', 'TCGA', 'TRIO', 'VAREPOP', 'WCDT']
+gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDERS', 'FM', 'HCMI', 'MMRF', 'NCICCR',
+                   'OHSU', 'ORGANOID', 'REBC', 'TARGET', 'TCGA', 'TRIO', 'VAREPOP', 'WCDT']
 
 
 def fhir_ndjson(entity, out_path):
@@ -40,7 +42,6 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
     condition_transformer = ConditionTransformer(session)
     specimen_transformer = SpecimenTransformer(session)
     file_transformer = DocumentReferenceTransformer(session)
-
 
     if path:
         meta_path = Path(path)
@@ -186,11 +187,13 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
                     research_study = research_study_transformer.research_study(project, cda_rs_subject)
 
                     # gdc_dbgap = session.execute(session.query(GDCProgramdbGap).filter(GDCProgramdbGap.GDC_program_name.in_(gdc_dbgap_names))).all()
-                    gdc_dbgap = session.execute(session.query(GDCProgramdbGap).where(GDCProgramdbGap.GDC_program_name.contains(research_study.name))).one_or_none()
+                    gdc_dbgap = session.execute(session.query(GDCProgramdbGap).where(
+                        GDCProgramdbGap.GDC_program_name.contains(research_study.name))).one_or_none()
 
                     if gdc_dbgap:
                         # parent dbGap ID for GDC projects ex. TCGA dgGap id for all projetcs including TCGA substring (ex. TCGA-BRCA)
-                        research_study.identifier.append(Identifier(**{"system": "https://www.ncbi.nlm.nih.gov/gap/GDC", "value": gdc_dbgap[0]}))
+                        research_study.identifier.append(
+                            Identifier(**{"system": "https://www.ncbi.nlm.nih.gov/gap/GDC", "value": gdc_dbgap[0]}))
 
                     # query and fetch projet's dbgap id
                     dbGap_study_accession = session.execute(
@@ -236,7 +239,8 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
                                 if _program_research_study:
                                     research_studies.append(_program_research_study)
                                     # research_study.partOf =
-                                    part_of_study.append(Reference(**{"reference": f"ResearchStudy/{_program_research_study.id}"}))
+                                    part_of_study.append(
+                                        Reference(**{"reference": f"ResearchStudy/{_program_research_study.id}"}))
 
                             # ResearchStudy relations
                             # GDC <- [IDC, PDC, ICDC, CDS] and HTAN & CMPC
@@ -273,22 +277,27 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
                                 if _p.program:
                                     parent_program = research_study_transformer.program_research_study(
                                         name=_p.program)
-                                    part_of_study = [p for p in part_of_study if p.reference not in f"ResearchStudy/{parent_program.id}"]
-                                    part_of_study.append(Reference(**{"reference": f"ResearchStudy/{parent_program.id}"}))
+                                    part_of_study = [p for p in part_of_study if
+                                                     p.reference not in f"ResearchStudy/{parent_program.id}"]
+                                    part_of_study.append(
+                                        Reference(**{"reference": f"ResearchStudy/{parent_program.id}"}))
                                     research_studies.append(parent_program)
 
                                 if _p_name:
                                     main_program = research_study_transformer.program_research_study(
                                         name=_p_name)
-                                    part_of_study = [p for p in part_of_study if p.reference not in f"ResearchStudy/{main_program.id}"]
+                                    part_of_study = [p for p in part_of_study if
+                                                     p.reference not in f"ResearchStudy/{main_program.id}"]
                                     part_of_study.append(Reference(**{"reference": f"ResearchStudy/{main_program.id}"}))
                                     research_studies.append(main_program)
 
                                 if _p.sub_program:
                                     parent_sub_program = research_study_transformer.program_research_study(
                                         name=_p.sub_program)
-                                    part_of_study = [p for p in part_of_study if p.reference not in f"ResearchStudy/{parent_sub_program.id}"]
-                                    part_of_study.append(Reference(**{"reference": f"ResearchStudy/{parent_sub_program.id}"}))
+                                    part_of_study = [p for p in part_of_study if
+                                                     p.reference not in f"ResearchStudy/{parent_sub_program.id}"]
+                                    part_of_study.append(
+                                        Reference(**{"reference": f"ResearchStudy/{parent_sub_program.id}"}))
                                     research_studies.append(parent_sub_program)
 
                             if part_of_study:
@@ -365,12 +374,12 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
         if save and conditions:
             _conditions = {_condition.id: _condition for _condition in conditions if _condition}.values()
             fhir_conditions = [orjson.loads(c.json()) for c in _conditions if c]
-            fhir_ndjson(fhir_conditions,  str(meta_path / "Condition.ndjson"))
+            fhir_ndjson(fhir_conditions, str(meta_path / "Condition.ndjson"))
 
         if save and observations:
             observations = {_obs.id: _obs for _obs in observations if _obs}.values()
             patient_observations = [orjson.loads(observation.json()) for observation in observations]
-            fhir_ndjson(patient_observations,  str(meta_path / "Observation.ndjson"))
+            fhir_ndjson(patient_observations, str(meta_path / "Observation.ndjson"))
 
         # MedicationAdministration and Medication  -----------------------------------
         treatments = session.query(CDATreatment).all()
@@ -408,18 +417,31 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
             print(f"+++++++++++++ FILE's  SPECIMENS: {_file_specimen_ids}")
 
             fhir_file = file_transformer.fhir_document_reference(file, _file_subject_ids, _file_specimen_ids)
-            print("fhir_file DocumentReference: ", fhir_file["DocumentReference"], type(fhir_file["DocumentReference"]))
-            if save and fhir_file["DocumentReference"]:
-                document_references = {_doc_ref.id: _doc_ref for _doc_ref in fhir_file["DocumentReference"] if
-                                       _doc_ref}.values()
-                fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in
-                                            document_references]
-                fhir_ndjson(fhir_document_references, str(meta_path / "DocumentReference.ndjson"))
+            print("fhir_file DocumentReference: ", fhir_file["DocumentReference"],
+                  type(fhir_file["DocumentReference"]))
 
-            if save and fhir_file["Group"]:
-                groups = {_g.id: _g for _g in fhir_file["group"] if _g}.values()
-                fhir_groups = [orjson.loads(group.json()) for group in groups]
-                fhir_ndjson(fhir_groups, str(meta_path / "Group.ndjson"))
+            if save and fhir_file["DocumentReference"]:
+                document_references = fhir_file["DocumentReference"]
+
+                if isinstance(document_references, list) and all(
+                        isinstance(ref, DocumentReference) for ref in document_references):
+                    _document_references = {_doc_ref.id: _doc_ref for _doc_ref in   document_references if _doc_ref}.values()
+                    fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in
+                                                _document_references]
+                    fhir_ndjson(fhir_document_references, str(meta_path / "DocumentReference.ndjson"))
+                else:
+                    print(f"DocumentReference: {fhir_file["DocumentReference"]} \n is not in the expected format or type.\n")
+
+            if save and fhir_file.get("Group"):
+                groups = fhir_file["Group"]
+
+                if isinstance(groups, list) and all(isinstance(group, Group) for group in groups):
+                    _groups = {group.id: group for group in groups if group.id}.values()
+
+                    fhir_groups = [orjson.loads(group.json()) for group in _groups]
+                    fhir_ndjson(fhir_groups, str(meta_path / "Group.ndjson"))
+                else:
+                    print(f"Group: {fhir_file["Group"]} \n is not in the expected format or type.\n")
 
     finally:
         print("****** Closing Session ******")

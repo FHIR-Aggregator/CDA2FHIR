@@ -804,9 +804,10 @@ class DocumentReferenceTransformer(Transformer):
                 }
             ]
         })
-        return {"DocumentReference": doc_ref, "Group": group}
+        return {"DocumentReference": [doc_ref], "Group": [group]}
 
-    def fhir_attachment(self, cda_file: CDAFile) -> Attachment:
+    @staticmethod
+    def fhir_attachment(cda_file: CDAFile) -> Attachment:
         attachment = Attachment(**{
             "contentType": cda_file.data_type,
             "title": cda_file.label,
@@ -817,7 +818,8 @@ class DocumentReferenceTransformer(Transformer):
 
     def fhir_group(self, member_ids: list, _type: str, _identifier: Identifier) -> Group:
         _members = [GroupMember(**{'entity': m}) for m in member_ids]
-        group_id = self.mint_id(identifier="_".join([_identifier, _type]), resource_type="Group")
+        _identifier.value = "_".join([_identifier.value, _type])
+        group_id = self.mint_id(identifier=_identifier, resource_type="Group")
         group = Group(**{'id': group_id, "identifier": _identifier, "membership": 'definitional',
                          'member': _members, "type": _type})
         return group
