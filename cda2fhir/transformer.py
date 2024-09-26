@@ -845,6 +845,6 @@ class DocumentReferenceTransformer(Transformer):
         _members = [GroupMember(**{'entity': Reference(**{"reference": f"{ref_type}/{m}"})}) for m in member_ids]
         _identifier.value = "_".join([_identifier.value, _type])
         group_id = self.mint_id(identifier=_identifier, resource_type="Group")
-        group = Group(**{'id': group_id, "identifier": _identifier, "membership": 'definitional',
+        group = Group(**{'id': group_id, "identifier": [_identifier], "membership": 'definitional',
                          'member': _members, "type": _type})
         return group
