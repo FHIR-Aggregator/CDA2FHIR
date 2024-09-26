@@ -755,8 +755,6 @@ class DocumentReferenceTransformer(Transformer):
             group = self.fhir_group(member_ids=patient_fhir_ids, _type="patient", _identifier=_doc_ref_identifier)
             subject_reference = Reference(**{"reference": f"Group/{group.id}"})
 
-        # if specimens:
-        #     based_on = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimens]
 
         specimen_fhir_ids = []
         if specimens:
@@ -825,7 +823,7 @@ class DocumentReferenceTransformer(Transformer):
                 }
             ]
         })
-        return {"DocumentReference": [doc_ref], "Group": [group]}
+        return {"DocumentReference": doc_ref, "Group": group}
 
     @staticmethod
     def fhir_attachment(cda_file: CDAFile) -> Attachment:
