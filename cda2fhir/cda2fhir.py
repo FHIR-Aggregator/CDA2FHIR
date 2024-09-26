@@ -411,23 +411,32 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
 
         for file in files:
             print(f"File ID: {file.id}, File DRS URI: {file.drs_uri}")
-            _file_subject_ids = [file_subject.subject_id for file_subject in file.file_subject_relation]
-            print(f"++++++++++++++ FILE's SUBJECTS: {_file_subject_ids}")
-            _file_specimen_ids = [file_specimen.specimen_id for file_specimen in file.specimen_file_relation]
-            print(f"+++++++++++++ FILE's  SPECIMENS: {_file_specimen_ids}")
 
-            fhir_file = file_transformer.fhir_document_reference(file, _file_subject_ids, _file_specimen_ids)
-            print("fhir_file DocumentReference: ", fhir_file["DocumentReference"],
-                  type(fhir_file["DocumentReference"]))
+            _file_subjects = [
+                session.query(CDASubject).filter(CDASubject.id == file_subject.subject_id).first()
+                for file_subject in file.file_subject_relation
+            ]
+            _file_subjects = [subject for subject in _file_subjects if subject]  # remove none
+            print(f"++++++++++++++ FILE's SUBJECTS: {[_subject.id for _subject in _file_subjects]}")
+
+            _file_specimens = [
+                session.query(CDASpecimen).filter(CDASpecimen.id == file_specimen.specimen_id).first()
+                for file_specimen in file.specimen_file_relation
+            ]
+            _file_specimens = [specimen for specimen in _file_specimens if specimen]  # remove none
+            print(f"+++++++++++++ FILE's SPECIMENS: {[_specimen.id for _specimen in _file_specimens]}")
+
+            # DocumentReference passing associated CDASubject and CDASpecimen
+            fhir_file = file_transformer.fhir_document_reference(file, _file_subjects, _file_specimens)
+            print("fhir_file DocumentReference: ", fhir_file["DocumentReference"], type(fhir_file["DocumentReference"]))
 
             if save and fhir_file["DocumentReference"]:
                 document_references = fhir_file["DocumentReference"]
 
                 if isinstance(document_references, list) and all(
                         isinstance(ref, DocumentReference) for ref in document_references):
-                    _document_references = {_doc_ref.id: _doc_ref for _doc_ref in   document_references if _doc_ref}.values()
-                    fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in
-                                                _document_references]
+                    _document_references = {_doc_ref.id: _doc_ref for _doc_ref in document_references if _doc_ref}.values()
+                    fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in _document_references]
                     fhir_ndjson(fhir_document_references, str(meta_path / "DocumentReference.ndjson"))
                 else:
                     print(f"DocumentReference: {fhir_file["DocumentReference"]} \n is not in the expected format or type.\n")
@@ -437,11 +446,10 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
 
                 if isinstance(groups, list) and all(isinstance(group, Group) for group in groups):
                     _groups = {group.id: group for group in groups if group.id}.values()
-
                     fhir_groups = [orjson.loads(group.json()) for group in _groups]
                     fhir_ndjson(fhir_groups, str(meta_path / "Group.ndjson"))
                 else:
-                    print(f"Group: {fhir_file["Group"]} \n is not in the expected format or type.\n")
+                    print(f"Group: {fhir_file['Group']} \n is not in the expected format or type.\n")
 
     finally:
         print("****** Closing Session ******")

@@ -714,13 +714,15 @@ class SpecimenTransformer(Transformer):
 
 
 class DocumentReferenceTransformer(Transformer):
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, patient_transformer: PatientTransformer, specimen_transfomer: SpecimenTransformer):
         super().__init__(session)
         self.session = session
         self.project_id = 'CDA'
         self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
+        self.patient_transformer = patient_transformer
+        self.specimen_transformer = specimen_transfomer
 
-    def fhir_document_reference(self, cda_file: CDAFile, patients: list, specimens: list) -> dict:
+    def fhir_document_reference(self, cda_file: CDAFile, patients: list[CDASubject], specimens: list[CDASpecimen]) -> dict:
 
         category = []
         subject_reference = None
@@ -737,14 +739,33 @@ class DocumentReferenceTransformer(Transformer):
             **{"system": "".join([f"https://{CDA_SITE}/", "dbgap_accession_number"]), "value": cda_file.dbgap_accession_number})
 
         _doc_ref_id = self.mint_id(identifier=_doc_ref_identifier, resource_type="DocumentReference")
-        if patients and len(patients) == 1:
-            subject_reference = Reference(**{"reference": f"Patient/{patients[0]}"})
-        else:
-            group = self.fhir_group(member_ids=patients, _type="patient", _identifier=_doc_ref_identifier)
-            subject_reference = Reference(**{"reference": "/".join(["Group", group.id])})
 
+        # subjects (patients) and their alias ids -> mint ids
+        patient_fhir_ids = []
+        if patients:
+            for subject in patients:
+                patient_identifiers = self.patient_transformer.patient_identifier(subject)
+
+                fhir_patient_id = self.patient_transformer.patient_mintid(patient_identifiers[0])
+                patient_fhir_ids.append(fhir_patient_id)
+
+        if len(patient_fhir_ids) == 1:
+            subject_reference = Reference(**{"reference": f"Patient/{patient_fhir_ids[0]}"})
+        else:
+            group = self.fhir_group(member_ids=patient_fhir_ids, _type="patient", _identifier=_doc_ref_identifier)
+            subject_reference = Reference(**{"reference": f"Group/{group.id}"})
+
+        # if specimens:
+        #     based_on = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimens]
+
+        specimen_fhir_ids = []
         if specimens:
-            based_on = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimens]
+            for specimen in specimens:
+                specimen_identifiers = self.specimen_transformer.specimen_identifier(specimen)
+                fhir_specimen_id = self.specimen_transformer.specimen_mintid(specimen_identifiers[0])
+                specimen_fhir_ids.append(fhir_specimen_id)
+
+            based_on = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimen_fhir_ids]
 
         if cda_file.file_format:
             _type = CodeableConcept(**{"coding":
@@ -817,7 +838,13 @@ class DocumentReferenceTransformer(Transformer):
         return attachment
 
     def fhir_group(self, member_ids: list, _type: str, _identifier: Identifier) -> Group:
-        _members = [GroupMember(**{'entity': m}) for m in member_ids]
+
+        if _type == "patient":
+            ref_type = "Patient"
+        elif _type == "specimen":
+            ref_type = "Specimen"
+
+        _members = [GroupMember(**{'entity': Reference(**{"reference": f"{ref_type}/{m}"})}) for m in member_ids]
         _identifier.value = "_".join([_identifier.value, _type])
         group_id = self.mint_id(identifier=_identifier, resource_type="Group")
         group = Group(**{'id': group_id, "identifier": _identifier, "membership": 'definitional',
