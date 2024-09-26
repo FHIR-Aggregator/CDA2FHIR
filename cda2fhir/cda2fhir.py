@@ -41,7 +41,7 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
     research_subject_transformer = ResearchSubjectTransformer(session)
     condition_transformer = ConditionTransformer(session)
     specimen_transformer = SpecimenTransformer(session)
-    file_transformer = DocumentReferenceTransformer(session)
+    file_transformer = DocumentReferenceTransformer(session, patient_transformer, specimen_transformer)
 
     if path:
         meta_path = Path(path)
