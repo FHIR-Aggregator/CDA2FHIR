@@ -705,7 +705,7 @@ class SpecimenTransformer(Transformer):
     def specimen_identifier(cda_specimen: CDASpecimen) -> list[Identifier]:
         """CDA Specimen FHIR Identifier."""
         specimen_id_system = "".join([f"https://{CDA_SITE}/", "specimen"])
-        specimen_identifier = Identifier(**{'system': specimen_id_system, 'value': cda_specimen.id})
+        specimen_identifier = Identifier(**{'system': specimen_id_system, 'value': cda_specimen.id, "use": "official"})
         return [specimen_identifier]
 
     def specimen_mintid(self, specimen_identifier: Identifier) -> str:
@@ -731,14 +731,18 @@ class DocumentReferenceTransformer(Transformer):
         category = []
         group = None
 
-        _doc_ref_identifier = Identifier(
-            **{"system": "".join([f"https://{CDA_SITE}/", "system"]), "value": cda_file.id})
-        _doc_ref_alias_identifier = Identifier(
-            **{"system": "".join([f"https://{CDA_SITE}/", "alias"]), "value": str(cda_file.integer_id_alias)})
-        _doc_ref_dbgap_identifier = Identifier(
-            **{"system": "".join([f"https://{CDA_SITE}/", "dbgap_accession_number"]), "value": cda_file.dbgap_accession_number})
+        _doc_ref_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "system"]),
+                                            "value": cda_file.id,
+                                            "use": "official"})
+        _doc_ref_alias_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "alias"]),
+                                                  "value": str(cda_file.integer_id_alias),
+                                                  "use": "secondary"})
+        _doc_ref_dbgap_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "dbgap_accession_number"]),
+                                                  "value": cda_file.dbgap_accession_number,
+                                                  "use": "secondary"})
 
         _doc_ref_id = self.mint_id(identifier=_doc_ref_identifier, resource_type="DocumentReference")
+        assert _doc_ref_id, f"DocumentReference must have a mint id."
 
         # subjects (patients) and their alias ids -> mint ids
         patient_fhir_ids = []
@@ -755,15 +759,17 @@ class DocumentReferenceTransformer(Transformer):
             group = self.fhir_group(member_ids=patient_fhir_ids, _type="patient", _identifier=_doc_ref_identifier)
             subject_reference = Reference(**{"reference": f"Group/{group.id}"})
 
+        assert _doc_ref_identifier, f"DocumentReference must have an Identifier."
 
         specimen_fhir_ids = []
         if specimens:
             for specimen in specimens:
                 specimen_identifiers = self.specimen_transformer.specimen_identifier(specimen)
                 fhir_specimen_id = self.specimen_transformer.specimen_mintid(specimen_identifiers[0])
-                specimen_fhir_ids.append(fhir_specimen_id)
-
-            based_on = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimen_fhir_ids]
+                if fhir_specimen_id:
+                    specimen_fhir_ids.append(fhir_specimen_id)
+            if specimen_fhir_ids:
+                based_on = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimen_fhir_ids]
 
         if cda_file.file_format:
             _type = CodeableConcept(**{"coding":
