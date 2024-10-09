@@ -29,7 +29,7 @@ def fhir_ndjson(entity, out_path):
             file.write(json.dumps(entity, ensure_ascii=False))
 
 
-def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
+def cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save=True, verbose=False):
     """CDA2FHIR attempts to transform the baseclass definitions of CDA data defined in cdamodels to query relevant
     information to create FHIR entities: Specimen, ResearchSubject,
     ResearchStudy, Condition, BodyStructure, Observation utilizing transfomer classes."""
@@ -273,7 +273,7 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
                                       "PDC:", _p.project_pdc,
                                       "IDC:", _p.project_idc, "CDS:", _p.project_cds, "ICDC:", _p.project_icdc,
                                       "program_project_match:", _p_name)
-
+                                #
                                 if _p.program:
                                     parent_program = research_study_transformer.program_research_study(
                                         name=_p.program)
@@ -389,63 +389,65 @@ def cda2fhir(path, n_samples, n_diagnosis, n_files, save=True, verbose=False):
                 print(f"id: {treatment.id}, therapeutic_agent: {treatment.therapeutic_agent}")
 
         # File  -----------------------------------
+        # requires pre-processing and validation
         # large record set -> 30+ GB takes time
-        if n_files:
-            n_files = int(n_files)
-            files = session.execute(
-                select(CDAFile)
-                .order_by(func.random())
-                .limit(n_files)
-                .options(
+        if transform_files:
+            if n_files:
+                n_files = int(n_files)
+                files = session.execute(
+                    select(CDAFile)
+                    .order_by(func.random())
+                    .limit(n_files)
+                    .options(
+                        selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
+                        selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen)
+                    )
+                ).scalars().all()
+            else:
+                files = session.query(CDAFile).options(
                     selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
                     selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen)
-                )
-            ).scalars().all()
-        else:
-            files = session.query(CDAFile).options(
-                selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
-                selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen)
-            ).all()
+                ).all()
 
-        assert files, "Files are not defined."
+            assert files, "Files are not defined."
 
-        all_files = []
-        all_groups = []
-        for file in files:
-            print(f"File ID: {file.id}, File DRS URI: {file.drs_uri}")
+            all_files = []
+            all_groups = []
+            for file in files:
+                print(f"File ID: {file.id}, File DRS URI: {file.drs_uri}")
 
-            _file_subjects = [
-                session.query(CDASubject).filter(CDASubject.id == file_subject.subject_id).first()
-                for file_subject in file.file_subject_relation
-            ]
-            _file_subjects = [subject for subject in _file_subjects if subject]  # remove none
-            print(f"++++++++++++++ FILE's SUBJECTS: {[_subject.id for _subject in _file_subjects]}")
+                _file_subjects = [
+                    session.query(CDASubject).filter(CDASubject.id == file_subject.subject_id).first()
+                    for file_subject in file.file_subject_relation
+                ]
+                _file_subjects = [subject for subject in _file_subjects if subject]  # remove none
+                print(f"++++++++++++++ FILE's SUBJECTS: {[_subject.id for _subject in _file_subjects]}")
 
-            _file_specimens = [
-                session.query(CDASpecimen).filter(CDASpecimen.id == file_specimen.specimen_id).first()
-                for file_specimen in file.specimen_file_relation
-            ]
-            _file_specimens = [specimen for specimen in _file_specimens if specimen]  # remove none
-            print(f"+++++++++++++ FILE's SPECIMENS: {[_specimen.id for _specimen in _file_specimens]}")
+                _file_specimens = [
+                    session.query(CDASpecimen).filter(CDASpecimen.id == file_specimen.specimen_id).first()
+                    for file_specimen in file.specimen_file_relation
+                ]
+                _file_specimens = [specimen for specimen in _file_specimens if specimen]  # remove none
+                print(f"+++++++++++++ FILE's SPECIMENS: {[_specimen.id for _specimen in _file_specimens]}")
 
-            # DocumentReference passing associated CDASubject and CDASpecimen
-            fhir_file = file_transformer.fhir_document_reference(file, _file_subjects, _file_specimens)
-            if fhir_file["DocumentReference"] and isinstance(fhir_file["DocumentReference"], DocumentReference):
-                all_files.append(fhir_file["DocumentReference"])
+                # DocumentReference passing associated CDASubject and CDASpecimen
+                fhir_file = file_transformer.fhir_document_reference(file, _file_subjects, _file_specimens)
+                if fhir_file["DocumentReference"] and isinstance(fhir_file["DocumentReference"], DocumentReference):
+                    all_files.append(fhir_file["DocumentReference"])
 
-            this_files_group = fhir_file.get("Group")
-            if this_files_group and isinstance(this_files_group, Group):
-                all_groups.append(this_files_group)
+                this_files_group = fhir_file.get("Group")
+                if this_files_group and isinstance(this_files_group, Group):
+                    all_groups.append(this_files_group)
 
-        if save and all_files:
-            document_references = {_doc_ref.id: _doc_ref for _doc_ref in all_files if _doc_ref}.values()
-            fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in document_references]
-            fhir_ndjson(fhir_document_references, str(meta_path / "DocumentReference.ndjson"))
+            if save and all_files:
+                document_references = {_doc_ref.id: _doc_ref for _doc_ref in all_files if _doc_ref}.values()
+                fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in document_references]
+                fhir_ndjson(fhir_document_references, str(meta_path / "DocumentReference.ndjson"))
 
-        if save and all_groups:
-            groups = {group.id: group for group in all_groups if group.id}.values()
-            fhir_groups = [orjson.loads(group.json()) for group in groups]
-            fhir_ndjson(fhir_groups, str(meta_path / "Group.ndjson"))
+            if save and all_groups:
+                groups = {group.id: group for group in all_groups if group.id}.values()
+                fhir_groups = [orjson.loads(group.json()) for group in groups]
+                fhir_ndjson(fhir_groups, str(meta_path / "Group.ndjson"))
 
     finally:
         print("****** Closing Session ******")

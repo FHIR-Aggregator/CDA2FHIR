@@ -18,9 +18,10 @@ def cli():
 @click.option('-ns', '--n_samples', required=False, help="Number of samples to randomly select - max 100.")
 @click.option('-nd', '--n_diagnosis', required=False, help="Number of diagnosis to randomly select - max 100.")
 @click.option('-nf', '--n_files', required=False, help="Number of files to randomly select - max 100.")
+@click.option('-f', '--transform_files', is_flag=True, default=False, required=False, help="Transform CDA files to FHIR DocumentReference and Group.")
 @click.option("-p", "--path", default=None,
               help="Path to save the FHIR NDJSON files. default is CDA2FHIR/data/META.")
-def transform(n_samples, n_diagnosis, n_files, save, verbose, path):
+def transform(n_samples, n_diagnosis, transform_files, n_files, save, verbose, path):
     assert os.path.exists(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw'))), "Please make sure CDA data is in CDA2FHIR/data/raw directory before pursuing."
 
     if n_samples:
@@ -34,7 +35,7 @@ def transform(n_samples, n_diagnosis, n_files, save, verbose, path):
         if not os.path.isdir(path):
             raise ValueError(f"Path: '{path}' is not a valid directory.")
 
-    cda2fhir.cda2fhir(path, n_samples, n_diagnosis, n_files, save, verbose)
+    cda2fhir.cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save, verbose)
 
 
 if __name__ == '__main__':

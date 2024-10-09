@@ -1,4 +1,5 @@
 import re
+import uuid
 from fhir.resources.patient import Patient
 from fhir.resources.specimen import Specimen, SpecimenCollection
 from fhir.resources.identifier import Identifier
@@ -27,6 +28,16 @@ class Transformer:
         self.session = session
         self.project_id = 'CDA'
         self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
+
+    @staticmethod
+    def is_valid_uuid(value: str) -> bool:
+        if value is None:
+            return False
+        try:
+            _obj = uuid.UUID(value, version=5)
+        except ValueError:
+            return False
+        return True
 
     def mint_id(self, identifier: Identifier | str, resource_type: str = None) -> str:
         """create a UUID from an identifier. - mint id via Walsh's convention
@@ -731,7 +742,7 @@ class DocumentReferenceTransformer(Transformer):
         category = []
         group = None
 
-        _doc_ref_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "system"]),
+        _doc_ref_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "id"]),
                                             "value": cda_file.id,
                                             "use": "official"})
         _doc_ref_alias_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "alias"]),
@@ -751,13 +762,15 @@ class DocumentReferenceTransformer(Transformer):
                 patient_identifiers = self.patient_transformer.patient_identifier(subject)
 
                 fhir_patient_id = self.patient_transformer.patient_mintid(patient_identifiers[0])
-                patient_fhir_ids.append(fhir_patient_id)
-
+                if fhir_patient_id and self.is_valid_uuid(fhir_patient_id):
+                    patient_fhir_ids.append(fhir_patient_id)
         if len(patient_fhir_ids) == 1:
             subject_reference = Reference(**{"reference": f"Patient/{patient_fhir_ids[0]}"})
-        else:
+        elif len(patient_fhir_ids) > 1:
             group = self.fhir_group(member_ids=patient_fhir_ids, _type="patient", _identifier=_doc_ref_identifier)
             subject_reference = Reference(**{"reference": f"Group/{group.id}"})
+        else:
+            raise ValueError("Patient FHIR ids are not valid mint_ids.")
 
         assert _doc_ref_identifier, f"DocumentReference must have an Identifier."
 
@@ -766,14 +779,14 @@ class DocumentReferenceTransformer(Transformer):
             for specimen in specimens:
                 specimen_identifiers = self.specimen_transformer.specimen_identifier(specimen)
                 fhir_specimen_id = self.specimen_transformer.specimen_mintid(specimen_identifiers[0])
-                if fhir_specimen_id:
+                if fhir_specimen_id and self.is_valid_uuid(fhir_specimen_id):
                     specimen_fhir_ids.append(fhir_specimen_id)
             if specimen_fhir_ids:
                 based_on = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimen_fhir_ids]
 
         if cda_file.file_format:
             _type = CodeableConcept(**{"coding":
-                                           [{"system": "".join([f"https://{CDA_SITE}/", "system"]),
+                                           [{"system": "".join([f"https://{CDA_SITE}/", "file_format"]),
                                              "code": cda_file.file_format,
                                              "display": cda_file.file_format}]
                                        })

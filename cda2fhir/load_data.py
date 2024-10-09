@@ -140,7 +140,7 @@ def load_data():
             'cda2fhir').parent / 'data' / 'raw' / 'Identifier_maps' / 'project_program_relation_summary.csv')),
                    CDAProjectRelation, session)
         # if not table_exists(engine, ''):
-        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_reduced.json')),
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'file.json')),
                    CDAFile, session)
         # if not table_exists(engine, ''):
         load_to_db(str(Path(importlib.resources.files(

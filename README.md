@@ -31,7 +31,8 @@ Options:
   -v, --verbose
   -ns, --n_samples TEXT    Number of samples to randomly select - max 100.
   -nd, --n_diagnosis TEXT  Number of diagnosis to randomly select - max 100.
-  -nf, --n_files TEXT  Number of files to randomly select - max 100.
+  -nf, --n_files TEXT      Number of files to randomly select - max 100.
+  -f, --transform_files    Transform CDA files to FHIR DocumentReference and Group.
   -p, --path TEXT          Path to save the FHIR NDJSON files. default is
                            CDA2FHIR/data/META.
   --help                   Show this message and exit.
