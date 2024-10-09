@@ -33,7 +33,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save=True, 
     """CDA2FHIR attempts to transform the baseclass definitions of CDA data defined in cdamodels to query relevant
     information to create FHIR entities: Specimen, ResearchSubject,
     ResearchStudy, Condition, BodyStructure, Observation utilizing transfomer classes."""
-    load_data()
+    load_data(transform_files)
 
     session = SessionLocal()
     patient_transformer = PatientTransformer(session)

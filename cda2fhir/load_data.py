@@ -61,7 +61,7 @@ def table_exists(engine, table_name):
     return table_name in inspector.get_table_names()
 
 
-def load_data():
+def load_data(transform_files):
     """load data into CDA models (call after initialization + change to DB load after CDA transition to DB)"""
     init_db()
     session = SessionLocal()
@@ -139,17 +139,18 @@ def load_data():
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'Identifier_maps' / 'project_program_relation_summary.csv')),
                    CDAProjectRelation, session)
-        # if not table_exists(engine, ''):
-        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'file.json')),
-                   CDAFile, session)
-        # if not table_exists(engine, ''):
-        load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_subject.tsv')),
-                   CDAFileSubject, session)
-        # if not table_exists(engine, ''):
-        load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_specimen.tsv')),
-                   CDAFileSpecimen, session)
+
+        if transform_files:
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'file.json')),
+                       CDAFile, session)
+            # if not table_exists(engine, ''):
+            load_to_db(str(Path(importlib.resources.files(
+                'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_subject.tsv')),
+                       CDAFileSubject, session)
+            # if not table_exists(engine, ''):
+            load_to_db(str(Path(importlib.resources.files(
+                'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_specimen.tsv')),
+                       CDAFileSpecimen, session)
 
     finally:
         session.expire_all()
