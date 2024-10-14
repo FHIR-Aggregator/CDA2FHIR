@@ -1,7 +1,9 @@
 import json
 import gzip
 import os
+import orjson
 import pandas as pd
+from fhir.resources import get_fhir_model_class
 
 
 def is_gzipped(file_path):
@@ -222,3 +224,48 @@ def initial_project_program_relations():
     df_gdc_cds.rename(columns={'project_b': 'project_cds'}, inplace=True)
     _summary = pd.merge(_summary, df_gdc_cds, left_on='project_gdc', right_on='project_a', how='left')[['project_gdc', 'project_pdc', 'project_idc']]
     pd.merge(_summary, df_gdc_cds, left_on='project_gdc', right_on='project_a', how='left')[['project_gdc', 'project_pdc', 'project_idc', 'project_cds']].to_csv("data/raw/Identifier_maps/project_program_relations_summary.csv")
+
+
+def is_valid_fhir_resource_type(resource_type):
+    try:
+        model_class = get_fhir_model_class(resource_type)
+        return model_class is not None
+    except KeyError:
+        return False
+
+
+def create_or_extend(new_items, folder_path='META', resource_type='Observation', update_existing=False):
+    assert is_valid_fhir_resource_type(resource_type), f"Invalid resource type: {resource_type}"
+
+    file_name = "".join([resource_type, ".ndjson"])
+    file_path = os.path.join(folder_path, file_name)
+
+    file_existed = os.path.exists(file_path)
+
+    existing_data = {}
+
+    if file_existed:
+        with open(file_path, 'r') as file:
+            for line in file:
+                try:
+                    item = orjson.loads(line)
+                    existing_data[item.get("id")] = item
+                except orjson.JSONDecodeError:
+                    continue
+
+    for new_item in new_items:
+        new_item_id = new_item["id"]
+        if new_item_id not in existing_data or update_existing:
+            existing_data[new_item_id] = new_item
+
+    with open(file_path, 'w') as file:
+        for item in existing_data.values():
+            file.write(orjson.dumps(item).decode('utf-8') + '\n')
+
+    if file_existed:
+        if update_existing:
+            print(f"{file_name} has new updates to existing data.")
+        else:
+            print(f"{file_name} has been extended, without updating existing data.")
+    else:
+        print(f"{file_name} has been created.")

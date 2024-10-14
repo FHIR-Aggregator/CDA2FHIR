@@ -1,6 +1,7 @@
 import pandas as pd
 import json
 import os
+import glob
 import mimetypes
 from pathlib import Path
 import importlib.resources
@@ -14,39 +15,49 @@ from cda2fhir.cdamodels import (CDASubject, CDASubjectResearchSubject, CDAResear
                                 ProjectdbGap, GDCProgramdbGap, CDAProjectRelation, CDAFile, CDAFileSpecimen, CDAFileSubject)
 
 
-def load_to_db(path, table_class, session):
-    result = mimetypes.guess_type(path, strict=False)[0]
+def file_size(file_path):
+    return os.path.getsize(file_path) / (1024 ** 3)  #size in GB
 
-    if 'json' in result:
-        """load json records and filter by CDA tags for human species - note: converted original data to list of dicts
-            vs. dict of dicts (for json lint passing)"""
-        with open(path, encoding='utf-8') as f:
-            data = json.load(f)
-            filter_species = {'Human', 'Homo sapiens'}
-            for line in data:
-                # allow for upstream filtering - only for subject with species in key
-                if 'species' in line.keys() and filter_species and line.get("species") not in filter_species:
-                    continue
+
+def load_to_db(paths, table_class, session):
+    """load data from single file or list of files (JSON, CSV, Excel, TSV) paths into the database."""
+    if isinstance(paths, str):
+        paths = [paths]
+
+    for path in paths:
+        print("####### Processing PATH: ", path)
+        result = mimetypes.guess_type(path, strict=False)[0]
+
+        if 'json' in result:
+            """load json records and filter by CDA tags for human species - note: converted original data to list of 
+               dicts vs. dict of dicts (for json lint passing)"""
+            with open(path, encoding='utf-8') as f:
+                data = json.load(f)
+                filter_species = {'Human', 'Homo sapiens'}
+                for line in data:
+                    if 'species' in line.keys() and filter_species and line.get("species") not in filter_species:
+                        continue
+                    try:
+                        session.add(table_class(**line))
+                    except IntegrityError:
+                        session.rollback()
+                        print(f"Skipping duplicate entry in {table_class.__tablename__}: {line}")
+        else:
+            if 'spreadsheetml.sheet' in result:
+                df = pd.read_excel(path)
+            elif 'csv' in result:
+                df = pd.read_csv(path)
+            elif 'tab-separated-values' in result:
+                df = pd.read_csv(path, sep='\t')
+
+            for row in df.to_dict(orient='records'):
                 try:
-                    session.add(table_class(**line))
+                    session.add(table_class(**row))
                 except IntegrityError:
                     session.rollback()
-                    print(f"Skipping duplicate entry in {table_class.__tablename__}: {line}")
-    else:
-        if 'spreadsheetml.sheet' in result:
-            df = pd.read_excel(path)
-        elif 'csv' in result:
-            df = pd.read_csv(path)
-        elif 'tab-separated-values' in result:
-            df = pd.read_csv(path, sep='\t')
+                    print(f"Skipping duplicate entry in {table_class.__tablename__}: {row}")
 
-        for row in df.to_dict(orient='records'):
-            try:
-                session.add(table_class(**row))
-            except IntegrityError:
-                session.rollback()
-                print(f"Skipping duplicate entry in {table_class.__tablename__}: {row}")
-    session.commit()
+        session.commit()
 
 
 def clear_table(table_class, session: Session):
@@ -141,9 +152,16 @@ def load_data(transform_files):
                    CDAProjectRelation, session)
 
         if transform_files:
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'file.json')),
-                       CDAFile, session)
+
+            folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'file_subset'))
+            file_paths = glob.glob(os.path.join(folder_path, '*'))
+            print("Globbed: ", file_paths)
+
+            load_to_db(file_paths, CDAFile, session)
+
             # if not table_exists(engine, ''):
+            # large file - can be useful to reduce the relations files by CDA project as well
+            # file alias -> project  join by file id with file_subject
             load_to_db(str(Path(importlib.resources.files(
                 'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_subject.tsv')),
                        CDAFileSubject, session)
