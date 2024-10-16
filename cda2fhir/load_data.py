@@ -153,7 +153,7 @@ def load_data(transform_files):
 
         if transform_files:
 
-            folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'file_subset'))
+            folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted'))
             file_paths = glob.glob(os.path.join(folder_path, '*'))
             print("Globbed: ", file_paths)
 
