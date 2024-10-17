@@ -1,5 +1,6 @@
 import re
 import uuid
+import logging
 from fhir.resources.patient import Patient
 from fhir.resources.specimen import Specimen, SpecimenCollection
 from fhir.resources.identifier import Identifier
@@ -21,6 +22,13 @@ from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearc
 from uuid import uuid3, uuid5, NAMESPACE_DNS
 
 CDA_SITE = 'cda.readthedocs.io'
+# global logging
+logging.basicConfig(filename='info.log', level=logging.INFO)
+
+# error logging
+error_handler = logging.FileHandler('error.log')
+error_handler.setLevel(logging.ERROR)
+logging.getLogger().addHandler(error_handler)
 
 
 class Transformer:
@@ -770,7 +778,10 @@ class DocumentReferenceTransformer(Transformer):
             group = self.fhir_group(member_ids=patient_fhir_ids, _type="patient", _identifier=_doc_ref_identifier)
             subject_reference = Reference(**{"reference": f"Group/{group.id}"})
         else:
-            raise ValueError("Patient FHIR ids are not valid mint_ids.")
+            logging.error(f"CDA file ID: {cda_file.id} - with patient FHIR ids: {patient_fhir_ids} are not valid mint_ids. "
+                          f"Skipping transformation.")
+            return {"DocumentReference": None, "Group": None}
+            # raise ValueError("Patient FHIR ids are not valid mint_ids.") # exists the program - instead logging the error
 
         assert _doc_ref_identifier, f"DocumentReference must have an Identifier."
 
