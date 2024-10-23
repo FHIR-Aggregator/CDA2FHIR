@@ -1,0 +1,56 @@
+# find data/raw/file_subset -type f -exec du -h {} + | grep 'G'
+
+6.0M	data/raw/file_subset/files_project_TCGA-LAML.json
+ 18M	data/raw/file_subset/files_project_TCGA-LGG.json
+2.0M	data/raw/file_subset/files_project_CGCI-HTMCP-DLBCL.json
+4.0M	data/raw/file_subset/files_project_CGCI-HTMCP-CC.json
+ 12M	data/raw/file_subset/files_project_TARGET-ALL-P2.json
+3.0M	data/raw/file_subset/files_project_TCGA-UVM.json
+ 18M	data/raw/file_subset/files_project_TCGA-KIRC.json
+3.0M	data/raw/file_subset/files_project_TARGET-ALL-P3.json
+4.0M	data/raw/file_subset/files_project_TCGA-ACC.json
+668K	data/raw/file_subset/files_project_TARGET-RT.json
+2.0M	data/raw/file_subset/files_project_CDDP_EAGLE-1.json
+5.0M	data/raw/file_subset/files_project_TARGET-WT.json
+ 18M	data/raw/file_subset/files_project_TCGA-OV.json
+7.0M	data/raw/file_subset/files_project_TCGA-TGCT.json
+ 11M	data/raw/file_subset/files_project_TCGA-CESC.json
+2.0M	data/raw/file_subset/files_project_TCGA-CHOL.json
+4.0M	data/raw/file_subset/files_project_TARGET-OS.json
+6.0M	data/raw/file_subset/files_project_TCGA-READ.json
+644K	data/raw/file_subset/files_project_ORGANOID-PANCREATIC.json
+7.0M	data/raw/file_subset/files_project_TCGA-PAAD.json
+7.0M	data/raw/file_subset/files_project_TCGA-PCPG.json
+ 21M	data/raw/file_subset/files_project_TCGA-LUAD.json
+2.8G	data/raw/file_subset/files_project_ispy2.json
+ 11M	data/raw/file_subset/files_project_TCGA-KIRP.json
+ 39M	data/raw/file_subset/files_project_TCGA-BRCA.json
+3.0M	data/raw/file_subset/files_project_TCGA-KICH.json
+7.0M	data/raw/file_subset/files_project_TCGA-ESCA.json
+ 19M	data/raw/file_subset/files_project_TCGA-LUSC.json
+3.0M	data/raw/file_subset/files_project_TCGA-UCS.json
+9.0M	data/raw/file_subset/files_project_TCGA-SARC.json
+644K	data/raw/file_subset/files_project_CGCI-HTMCP-LC.json
+ 18M	data/raw/file_subset/files_project_TCGA-PRAD.json
+ 34M	data/raw/file_subset/files_project_TARGET-AML.json
+ 16M	data/raw/file_subset/files_project_TCGA-STAD.json
+ 32K	data/raw/file_subset/files_project_MGT01.json
+5.0M	data/raw/file_subset/files_project_TCGA-THYM.json
+ 11M	data/raw/file_subset/files_project_TARGET-NBL.json
+ 11G	data/raw/file_subset/files_project_nlst.json
+132K	data/raw/file_subset/files_project_TARGET-CCSK.json
+1.5G	data/raw/file_subset/files_project_acrin_6698.json
+7.0M	data/raw/file_subset/files_project_CGCI-BLGSP.json
+ 16M	data/raw/file_subset/files_project_TCGA-SKCM.json
+4.0M	data/raw/file_subset/files_project_TCGA-MESO.json
+ 15M	data/raw/file_subset/files_project_TCGA-BLCA.json
+2.0M	data/raw/file_subset/files_project_TCGA-DLBC.json
+ 19M	data/raw/file_subset/files_project_TCGA-HNSC.json
+ 24K	data/raw/file_subset/files_project_ORGANOIDS01.json
+ 18M	data/raw/file_subset/files_project_TCGA-THCA.json
+ 68K	data/raw/file_subset/files_project_TARGET-ALL-P1.json
+ 13M	data/raw/file_subset/files_project_TCGA-LIHC.json
+ 16M	data/raw/file_subset/files_project_TCGA-COAD.json
+ 18M	data/raw/file_subset/files_project_TCGA-UCEC.json
+ 15M	data/raw/file_subset/files_project_TCGA-GBM.json
+388K	data/raw/file_subset/files_project_GLIOMA01.json
