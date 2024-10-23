@@ -53,7 +53,7 @@ You may choose to remove/leave the _.g3t_ folder in this directory. The UUIDs of
 to validate generated data run: 
 ```
 g3t meta validate <path to data/META folder with ndjson files> 
->>>> resources={'summary': {'Specimen': 715864, 'Observation': 724999, 'ResearchStudy': 423, 'BodyStructure': 180, 'Condition': 95288, 'ResearchSubject': 160662, 'Patient': 137522}}
+>>>> resources={'summary': {'Specimen': 721837, 'Observation': 731005, 'ResearchStudy': 427, 'BodyStructure': 163, 'Condition': 95262, 'ResearchSubject': 160649, 'Patient': 138738}}
 ```
 
 This command will validate your FHIR entities and their reference relations to each other. It will also generate a summary count of all entities in each ndjson file. 
