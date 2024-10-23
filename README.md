@@ -43,16 +43,27 @@ Options:
 cda2fhir transform 
 ``` 
 
+NOTE: in-case of interest in validating your FHIR data with GEN3, you will need to go through the [user-guide, setup, and documentation of GEN3 tracker](https://aced-idp.github.io/requirements/) before running the ```cda2fhir``` commands.
+
+### FHIR data validation 
+
+Before running the ```cda2fhir``` commands, you will need to walk through the [GEN3 user-guide, setup, and documentation](https://aced-idp.github.io/requirements/).
+You may choose to remove/leave the _.g3t_ folder in this directory. The UUIDs of each entity will be co-dependent on the _project_id_ of the .g3t/config.yaml file. 
+
+to validate generated data run: 
+```
+g3t meta validate <path to data/META folder with ndjson files> 
+>>>> resources={'summary': {'Specimen': 715864, 'Observation': 724999, 'ResearchStudy': 423, 'BodyStructure': 180, 'Condition': 95288, 'ResearchSubject': 160662, 'Patient': 137522}}
+```
+
+This command will validate your FHIR entities and their reference relations to each other. It will also generate a summary count of all entities in each ndjson file. 
+
+NOTE: This process may take _**5 minutes**_ or more, depending on your platform or compute power due to the size of the current data.
+
+
 ### Testing
 Current integration testing runs on all data and may take approximately _**2 hours**_.
 
 ```
 pytest -cov 
 ```
-### FHIR data validation 
-For FHIR data validation please run: 
-```
-g3t meta validate <path to data/META folder with ndjson files> 
->>>> resources={'summary': {'Specimen': 715864, 'Observation': 724999, 'ResearchStudy': 423, 'BodyStructure': 180, 'Condition': 95288, 'ResearchSubject': 160662, 'Patient': 137522}}
-```
-NOTE: This process may take more than _**5 minutes**_ due to the size of the current data.
