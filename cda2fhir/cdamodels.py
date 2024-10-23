@@ -45,7 +45,7 @@ class CDASubject(Base):
     @property
     def alias_id(self):
         """Fetch CDA subject's alias id from subject_alias_relations table - (one to one)"""
-        if self.subject_alias_relation: # TODO:need relations for new data
+        if self.subject_alias_relation and len(self.subject_alias_relation) > 0:
             return self.subject_alias_relation.__getitem__(0).subject_alias
         else:
             return None
