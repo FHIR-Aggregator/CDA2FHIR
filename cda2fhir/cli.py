@@ -1,3 +1,7 @@
+import sys
+
+from gen3_tracker.common import ERROR_COLOR, INFO_COLOR
+
 from cda2fhir import cda2fhir
 import click
 import os
@@ -36,6 +40,32 @@ def transform(n_samples, n_diagnosis, transform_files, n_files, save, verbose, p
             raise ValueError(f"Path: '{path}' is not a valid directory.")
 
     cda2fhir.cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save, verbose)
+
+
+@cli.command('validate')
+@click.option("-d", "--debug", is_flag=True, default=False,
+              help="Run in debug mode.")
+@click.option("-p", "--path", default=None,
+              help="Path to read the FHIR NDJSON files. default is CDA2FHIR/data/META.")
+def validate(debug: bool, path):
+    """Validate the output FHIR ndjson files."""
+    from gen3_tracker.git import run_command
+
+    if not path:
+        path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META'))
+    if not os.path.isdir(path):
+        raise ValueError(f"Path: '{path}' is not a valid directory.")
+
+    try:
+        from gen3_tracker.meta.validator import validate as validate_dir
+        from halo import Halo
+        with Halo(text='Validating', spinner='line', placement='right', color='white'):
+            result = validate_dir(path)
+        click.secho(result.resources, fg=INFO_COLOR, file=sys.stderr)
+    except Exception as e:
+        click.secho(str(e), fg=ERROR_COLOR, file=sys.stderr)
+        if debug:
+            raise
 
 
 if __name__ == '__main__':
