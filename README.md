@@ -47,14 +47,31 @@ NOTE: in-case of interest in validating your FHIR data with GEN3, you will need 
 
 ### FHIR data validation 
 
-Before running the ```cda2fhir``` commands, you will need to walk through the [GEN3 user-guide, setup, and documentation](https://aced-idp.github.io/requirements/).
-You may choose to remove/leave the _.g3t_ folder in this directory. The UUIDs of each entity will be co-dependent on the _project_id_ of the .g3t/config.yaml file. 
+#### disable gen3-client
+```
+mv ~/.gen3/gen3_client_config.ini ~/.gen3/gen3_client_config.ini-xxx
+mv ~/.gen3/gen3-client ~/.gen3/gen3-client-xxx
+```
 
-to validate generated data run: 
+#### Run validate
 ```
-g3t meta validate <path to data/META folder with ndjson files> 
->>>> resources={'summary': {'Specimen': 721837, 'Observation': 731005, 'ResearchStudy': 427, 'BodyStructure': 163, 'Condition': 95262, 'ResearchSubject': 160649, 'Patient': 138738}}
+ time cda2fhir validate
+{'summary': {'Specimen': 721837, 'Observation': 731005, 'ResearchStudy': 423, 'BodyStructure': 163, 'Condition': 95262, 'ResearchSubject': 160649, 'Patient': 138738}}
+
+real    5m
+user    5m
+sys     0m5.1s
+
 ```
+
+#### Restore gen3-client
+
+```
+mv ~/.gen3/gen3-client-xxx ~/.gen3/gen3-client
+mv ~/.gen3/gen3_client_config.ini-xxx ~/.gen3/gen3_client_config.ini
+  
+```
+
 
 This command will validate your FHIR entities and their reference relations to each other. It will also generate a summary count of all entities in each ndjson file. 
 
