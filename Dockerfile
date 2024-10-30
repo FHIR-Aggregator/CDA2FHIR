@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir charset_normalizer idna certifi requests pydantic pytest click \
     pathlib orjson tqdm uuid openpyxl pandas inflection iteration_utilities fhir.resources==7.1.0 \
-    sqlalchemy==2.0.31 gen3-tracker>=0.0.4rc36
+    sqlalchemy==2.0.31 gen3-tracker>=0.0.7rc1
 
 RUN pip install -e /app/CDA2FHIR
 
