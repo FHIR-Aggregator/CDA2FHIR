@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import importlib.resources
 
+
 @click.group()
 def cli():
     """Cancer Data Aggregator (CDA) FHIR schema Key and Content Mapping"""
@@ -20,21 +21,25 @@ def cli():
 @click.option('-v', '--verbose', required=False, is_flag=True, default=False, show_default=True)
 @click.option('-ns', '--n_samples', required=False, help="Number of samples to randomly select - max 100.")
 @click.option('-nd', '--n_diagnosis', required=False, help="Number of diagnosis to randomly select - max 100.")
+@click.option('-nf', '--n_files', required=False, help="Number of files to randomly select - max 100.")
+@click.option('-f', '--transform_files', is_flag=True, default=False, required=False, help="Transform CDA files to FHIR DocumentReference and Group.")
 @click.option("-p", "--path", default=None,
               help="Path to save the FHIR NDJSON files. default is CDA2FHIR/data/META.")
-def transform(n_samples, n_diagnosis, save, verbose, path):
+def transform(n_samples, n_diagnosis, transform_files, n_files, save, verbose, path):
     assert os.path.exists(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw'))), "Please make sure CDA data is in CDA2FHIR/data/raw directory before pursuing."
 
     if n_samples:
         assert int(n_samples) <= 100, "Please provide sample number less than 100"
     if n_diagnosis:
         assert int(n_diagnosis) <= 100, "Please provide diagnosis number less than 100"
+    if n_files:
+        assert int(n_files) <= 100, "Please provide file number less than 100"
 
     if save and path:
         if not os.path.isdir(path):
             raise ValueError(f"Path: '{path}' is not a valid directory.")
 
-    cda2fhir.cda2fhir(path, n_samples, n_diagnosis, save, verbose)
+    cda2fhir.cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save, verbose)
 
 
 @cli.command('validate')
