@@ -29,7 +29,7 @@ setup(
         'pandas',
         'inflection',
         'iteration_utilities',
-        'gen3-tracker>=0.0.4rc36',
+        'gen3-tracker>=0.0.7rc1',
         'fhir.resources>=7.1.0',  # FHIR® (Release R5, version 5.0.0)
         'sqlalchemy>=2.0.31'
 
