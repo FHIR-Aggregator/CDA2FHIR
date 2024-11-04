@@ -220,7 +220,10 @@ class PatientTransformer(Transformer):
         return patients
 
     def observation_cause_of_death(self, cause_of_death) -> Observation:
-        """observation for official cause of death of CDA patient."""
+        """
+            observation for official cause of death of CDA patient. source:
+            https://build.fhir.org/ig/HL7/vrdr/StructureDefinition-vrdr-cause-of-death-part1.html
+        """
         obs = Observation(**{
             "resourceType": "Observation",
             "id": "observation-cause-of-death",
@@ -240,7 +243,7 @@ class PatientTransformer(Transformer):
                 "coding": [
                     {
                         "system": "http://loinc.org",
-                        "code": "79378-6",
+                        "code": "69453-9",
                         "display": "Cause of death"
                     }
                 ]
