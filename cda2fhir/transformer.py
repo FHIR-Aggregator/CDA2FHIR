@@ -127,10 +127,10 @@ class PatientTransformer(Transformer):
     def patient_identifier(self, subject: CDASubject) -> list[Identifier]:
         """FHIR patient Identifier from a CDA subject."""
         subject_id_system = "".join([f"https://{CDA_SITE}/", "subject_id"])
-        subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id)})
+        subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id), "use":"official"})
 
         subject_alias_system = "".join([f"https://{CDA_SITE}/", "subject_alias"])
-        subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.alias_id)})
+        subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.alias_id), "use":"secondary"})
         return [subject_id_identifier, subject_alias_identifier]
 
     def patient_mintid(self, patient_identifier: Identifier) -> str:
@@ -262,7 +262,7 @@ class ResearchStudyTransformer(Transformer):
     def research_study(self, project: CDASubjectProject, research_subject: CDAResearchSubject) -> ResearchStudy:
         """CDA Projects to FHIR ResearchStudy."""
         if project.associated_project:
-            rs_identifier = self.research_study_identifier(project)
+            rs_identifier = self.research_study_identifier(project, use="official")
             rs_id = self.research_study_mintid(rs_identifier[0])
 
             condition = []
@@ -286,10 +286,10 @@ class ResearchStudyTransformer(Transformer):
             return research_study
 
     @staticmethod
-    def research_study_identifier(project: CDASubjectProject) -> list[Identifier]:
+    def research_study_identifier(project: CDASubjectProject, use: str) -> list[Identifier]:
         """CDA project FHIR Identifier."""
         project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
-        project_id_identifier = Identifier(**{'system': project_id_system, 'value': str(project.associated_project)})
+        project_id_identifier = Identifier(**{'system': project_id_system, 'value': str(project.associated_project), "use": use})
 
         return [project_id_identifier]
 
@@ -307,7 +307,7 @@ class ResearchSubjectTransformer(Transformer):
 
     def research_subject(self, cda_research_subject: CDAResearchSubject, patient: PatientTransformer,
                          research_study: ResearchStudyTransformer) -> ResearchSubject:
-        rs_identifier = self.research_subject_identifier(cda_research_subject)
+        rs_identifier = self.research_subject_identifier(cda_research_subject, use="official")
         _id = self.research_subject_mintid(rs_identifier[0])
 
         research_subject = ResearchSubject(
@@ -326,11 +326,11 @@ class ResearchSubjectTransformer(Transformer):
         return research_subject
 
     @staticmethod
-    def research_subject_identifier(cda_research_subject: CDAResearchSubject) -> list[Identifier]:
+    def research_subject_identifier(cda_research_subject: CDAResearchSubject, use: str) -> list[Identifier]:
         """CDA research subject FHIR Identifier."""
         research_subject_id_system = "".join([f"https://{CDA_SITE}/", "researchsubject"])
         research_subject_id_identifier = Identifier(
-            **{'system': research_subject_id_system, 'value': cda_research_subject.id})
+            **{'system': research_subject_id_system, 'value': cda_research_subject.id, "use": use})
 
         return [research_subject_id_identifier]
 
@@ -436,7 +436,7 @@ class ConditionTransformer(Transformer):
 
     def condition_observation(self, diagnosis, display, patient, _condition_id) -> Observation:
         condition_id_system = "".join([f"https://{CDA_SITE}/", "diagnosis"])
-        observation_identifier = Identifier(**{'system': condition_id_system, 'value': diagnosis.id})
+        observation_identifier = Identifier(**{'system': condition_id_system, 'value': diagnosis.id, "use":"official"})
         observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
 
         observation_code = None
@@ -497,7 +497,7 @@ class ConditionTransformer(Transformer):
     def condition_identifier(cda_diagnosis: CDADiagnosis) -> list[Identifier]:
         """CDA Diagnosis Condition FHIR Identifier."""
         condition_id_system = "".join([f"https://{CDA_SITE}/", "diagnosis"])
-        condition_identifier = Identifier(**{'system': condition_id_system, 'value': cda_diagnosis.id})
+        condition_identifier = Identifier(**{'system': condition_id_system, 'value': cda_diagnosis.id, "use":"official"})
         return [condition_identifier]
 
     def condition_mintid(self, condition_identifier: Identifier) -> str:
@@ -521,7 +521,7 @@ class SpecimenTransformer(Transformer):
         if cda_specimen.derived_from_specimen and cda_specimen.derived_from_specimen != "initial specimen":
             parent_specimen_id_system = "".join([f"https://{CDA_SITE}/", "specimen"])
             parent_specimen_identifier = Identifier(
-                **{'system': parent_specimen_id_system, 'value': cda_specimen.derived_from_specimen})
+                **{'system': parent_specimen_id_system, 'value': cda_specimen.derived_from_specimen, "use":"official"})
             parent_specimen_id = self.specimen_mintid(parent_specimen_identifier)
             parent = [{
                 "reference": f"Specimen/{parent_specimen_id}"
@@ -629,7 +629,7 @@ class SpecimenTransformer(Transformer):
 
         if components:
             observation_identifier = Identifier(
-                **{'system': f"https://{CDA_SITE}/specimen_observation", 'value': _specimen_id})
+                **{'system': f"https://{CDA_SITE}/specimen_observation", 'value': _specimen_id, "use":"official"})
             observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
 
             obs = Observation(
@@ -708,7 +708,7 @@ class SpecimenTransformer(Transformer):
                 })]
 
             cda_system = "".join([f"https://{CDA_SITE}", ])
-            bd_identifier = Identifier(**{'system': cda_system, 'value': str(cda_specimen.anatomical_site)})
+            bd_identifier = Identifier(**{'system': cda_system, 'value': str(cda_specimen.anatomical_site), "use":"official"})
 
             body_structure = BodyStructure(
                 **{"id": self.mint_id(identifier=bd_identifier, resource_type="BodyStructure"),

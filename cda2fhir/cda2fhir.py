@@ -194,7 +194,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save=True, 
                     if gdc_dbgap:
                         # parent dbGap ID for GDC projects ex. TCGA dgGap id for all projetcs including TCGA substring (ex. TCGA-BRCA)
                         research_study.identifier.append(
-                            Identifier(**{"system": "https://www.ncbi.nlm.nih.gov/gap/GDC", "value": gdc_dbgap[0]}))
+                            Identifier(**{"system": "https://www.ncbi.nlm.nih.gov/gap", "value": gdc_dbgap[0], "use": "secondary"}))
 
                     # query and fetch projet's dbgap id
                     dbGap_study_accession = session.execute(
@@ -203,8 +203,9 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save=True, 
                     ).first()
 
                     if dbGap_study_accession:
-                        dbGap_identifier = Identifier(**{'system': "https://www.ncbi.nlm.nih.gov/gap/",
-                                                         'value': dbGap_study_accession[0].dbgap_study_accession})
+                        dbGap_identifier = Identifier(**{'system': "https://www.ncbi.nlm.nih.gov/gap",
+                                                         'value': dbGap_study_accession[0].dbgap_study_accession,
+                                                         "use": "secondary"})
                         research_study.identifier.append(dbGap_identifier)
 
                     if research_study:
