@@ -82,7 +82,8 @@ class Transformer:
                 'id': _id,
                 'identifier': [_program_identifier],
                 'status': 'active',
-                'name': name
+                'name': name,
+                'title': name
             }
         )
         if research_study:
@@ -280,6 +281,7 @@ class ResearchStudyTransformer(Transformer):
                     'identifier': rs_identifier,
                     'status': 'active',
                     'name': project.associated_project,
+                    'title': project.associated_project,
                     'condition': condition
                 }
             )
