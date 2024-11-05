@@ -75,7 +75,7 @@ class Transformer:
 
     def program_research_study(self, name) -> ResearchStudy:
         """create top level program FHIR ResearchStudy"""
-        _program_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "system"]), "value": name})
+        _program_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "system"]), "value": name, "use": "official"})
         _id = self.mint_id(identifier=_program_identifier, resource_type="ResearchStudy")
         research_study = ResearchStudy(
             **{
@@ -128,10 +128,10 @@ class PatientTransformer(Transformer):
     def patient_identifier(self, subject: CDASubject) -> list[Identifier]:
         """FHIR patient Identifier from a CDA subject."""
         subject_id_system = "".join([f"https://{CDA_SITE}/", "subject_id"])
-        subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id), "use":"official"})
+        subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id), "use": "official"})
 
         subject_alias_system = "".join([f"https://{CDA_SITE}/", "subject_alias"])
-        subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.alias_id), "use":"secondary"})
+        subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.alias_id), "use": "secondary"})
         return [subject_id_identifier, subject_alias_identifier]
 
     def patient_mintid(self, patient_identifier: Identifier) -> str:
@@ -252,6 +252,76 @@ class PatientTransformer(Transformer):
                 "reference": f"Patient/example"
             },
             "valueString": cause_of_death
+        })
+        return obs
+
+    def observation_days_to_death(self, days_to_death) -> Observation:
+        """observation for official days to death of CDA patient."""
+        obs = Observation(**{
+            "resourceType": "Observation",
+            "id": "observation-days-to-death",
+            "status": "final",
+            "category": [
+                {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                            "code": "survey",
+                            "display": "survey"
+                        }
+                    ]
+                }
+            ],
+            "code": {
+                "coding": [
+                    {
+                        "system": "https://ontobee.org/",
+                        "code": "NCIT_C156419",
+                        "display": "Days between Diagnosis and Death"
+                    }
+                ]
+            },
+            "valueQuantity": {
+                "value": int(days_to_death),
+                "unit": "days",
+                "system": "http://unitsofmeasure.org",
+                "code": "d"
+            }
+        })
+        return obs
+
+    def observation_days_to_birth(self, days_to_birth) -> Observation:
+        """observation for official days to birth of CDA patient."""
+        obs = Observation(**{
+            "resourceType": "Observation",
+            "id": "observation-days-to-birth",
+            "status": "final",
+            "category": [
+                {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                            "code": "survey",
+                            "display": "survey"
+                        }
+                    ]
+                }
+            ],
+            "code": {
+                "coding": [
+                    {
+                        "system": "https://ontobee.org/",
+                        "code": "NCIT_C156418",
+                        "display": "Days Between Birth and Diagnosis"
+                    }
+                ]
+            },
+            "valueQuantity": {
+                "value": int(days_to_birth),
+                "unit": "days",
+                "system": "http://unitsofmeasure.org",
+                "code": "d"
+            }
         })
         return obs
 
@@ -427,6 +497,12 @@ class ConditionTransformer(Transformer):
                         ]
                     }
                 ),
+                "category": [CodeableConcept(
+                    **{
+                        "coding": [{"system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                                    "code": "encounter-diagnosis",
+                                    "display": "Encounter Diagnosis"}]}
+                )],
                 "code": CodeableConcept(
                     **{
                         "coding": [{"system": f"https://{CDA_SITE}/",
@@ -441,7 +517,7 @@ class ConditionTransformer(Transformer):
 
     def condition_observation(self, diagnosis, display, patient, _condition_id) -> Observation:
         condition_id_system = "".join([f"https://{CDA_SITE}/", "diagnosis"])
-        observation_identifier = Identifier(**{'system': condition_id_system, 'value': diagnosis.id, "use":"official"})
+        observation_identifier = Identifier(**{'system': condition_id_system, 'value': diagnosis.id, "use": "official"})
         observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
 
         observation_code = None
