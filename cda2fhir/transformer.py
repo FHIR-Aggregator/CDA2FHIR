@@ -574,6 +574,39 @@ class ConditionTransformer(Transformer):
         )
         return observation
 
+    def observation_method_of_diagnosis(self, method_of_diagnosis) -> Observation:
+        """observation for official method_of_diagnosis of CDA patient."""
+        obs = Observation(**{
+            "resourceType": "Observation",
+            "id": "observation-method-of-diagnosis",
+            "status": "final",
+            "category": [
+                {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                            "code": "exam",
+                            "display": "exam"
+                        }
+                    ]
+                }
+            ],
+            "code": {
+                "coding": [
+                    {
+                        "system": "https://ontobee.org/",
+                        "code": "NCIT_C177576",
+                        "display": "Diagnostic Method"
+                    }
+                ]
+            },
+            "subject": {
+                "reference": f"Patient/example"
+            },
+            "valueString": method_of_diagnosis
+        })
+        return obs
+
     @staticmethod
     def condition_identifier(cda_diagnosis: CDADiagnosis) -> list[Identifier]:
         """CDA Diagnosis Condition FHIR Identifier."""

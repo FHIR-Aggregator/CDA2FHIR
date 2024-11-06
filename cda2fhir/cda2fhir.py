@@ -264,7 +264,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save=True, 
                                         Reference(**{"reference": f"ResearchStudy/{_program_research_study.id}"}))
 
                             # ResearchStudy relations
-                            # CRDC <- GDC, IDC, PDC, ICDC, CDS and HTAN & CMPC
+                            # CRDC <- GDC, IDC, PDC, ICDC, CDS, HTAN, CMPC
                             project_name = project.associated_project
                             associated_project_programs = session.query(CDAProjectRelation).filter(
                                 or_(
@@ -391,6 +391,17 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save=True, 
                                                                                               condition.id)
                                     if observation:
                                         observations.append(observation)
+
+                        if diagnosis.method_of_diagnosis:
+                            obs_method_of_diagnosis = condition_transformer.observation_method_of_diagnosis(diagnosis.method_of_diagnosis)
+                            obs_method_of_diagnosis_identifier = Identifier(
+                                **{'system': "https://cda.readthedocs.io/method_of_diagnosis",
+                                   'value': "".join([patient_id, diagnosis.method_of_diagnosis])})
+                            obs_method_of_diagnosis.id = patient_transformer.mint_id(identifier=obs_method_of_diagnosis_identifier,
+                                                                                     resource_type="Observation")
+                            obs_method_of_diagnosis.subject = {"reference": f"Patient/{patient_id}"}
+                            obs_method_of_diagnosis.focus = [{"reference": f"Condition/{condition.id}"}]
+                            observations.append(obs_method_of_diagnosis)
 
         if save and conditions:
             _conditions = {_condition.id: _condition for _condition in conditions if _condition}.values()
