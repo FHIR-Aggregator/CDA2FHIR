@@ -144,9 +144,10 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save=True, 
             fhir_ndjson(patients, str(meta_path / "Patient.ndjson"))
 
         for subject in subjects:
+            patient_identifiers = patient_transformer.patient_identifier(subject)
+            patient_id = patient_transformer.patient_mintid(patient_identifiers[0])
+            
             if subject.cause_of_death:
-                patient_identifiers = patient_transformer.patient_identifier(subject)
-                patient_id = patient_transformer.patient_mintid(patient_identifiers[0])
                 obs = patient_transformer.observation_cause_of_death(subject.cause_of_death)
                 obs_identifier = Identifier(
                     **{'system': "https://cda.readthedocs.io/cause_of_death", 'value': "".join([patient_id, subject.cause_of_death])})
@@ -396,10 +397,10 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save=True, 
                             obs_method_of_diagnosis = condition_transformer.observation_method_of_diagnosis(diagnosis.method_of_diagnosis)
                             obs_method_of_diagnosis_identifier = Identifier(
                                 **{'system': "https://cda.readthedocs.io/method_of_diagnosis",
-                                   'value': "".join([patient_id, diagnosis.method_of_diagnosis])})
+                                   'value': "".join([_patient_diagnosis[0].id, diagnosis.method_of_diagnosis])})
                             obs_method_of_diagnosis.id = patient_transformer.mint_id(identifier=obs_method_of_diagnosis_identifier,
                                                                                      resource_type="Observation")
-                            obs_method_of_diagnosis.subject = {"reference": f"Patient/{patient_id}"}
+                            obs_method_of_diagnosis.subject = {"reference": f"Patient/{_patient_diagnosis[0].id}"}
                             obs_method_of_diagnosis.focus = [{"reference": f"Condition/{condition.id}"}]
                             observations.append(obs_method_of_diagnosis)
 
