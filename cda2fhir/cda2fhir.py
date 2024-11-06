@@ -146,29 +146,28 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_files, n_files, save=True, 
         for subject in subjects:
             patient_identifiers = patient_transformer.patient_identifier(subject)
             patient_id = patient_transformer.patient_mintid(patient_identifiers[0])
-            
-            if subject.cause_of_death:
+            if subject.cause_of_death and patient_id:
                 obs = patient_transformer.observation_cause_of_death(subject.cause_of_death)
                 obs_identifier = Identifier(
-                    **{'system': "https://cda.readthedocs.io/cause_of_death", 'value': "".join([patient_id, subject.cause_of_death])})
+                    **{'system': "https://cda.readthedocs.io/cause_of_death", 'value': "".join([str(patient_id), subject.cause_of_death])})
                 obs.id = patient_transformer.mint_id(identifier=obs_identifier, resource_type="Observation")
                 obs.subject = {"reference": f"Patient/{patient_id}"}
                 obs.focus = [{"reference": f"Patient/{patient_id}"}]
                 observations.append(obs)
 
-            if subject.days_to_death:
+            if subject.days_to_death and patient_id:
                 obs_days_to_death = patient_transformer.observation_days_to_death(subject.days_to_death)
                 obs_days_to_death_identifier = Identifier(
-                    **{'system': "https://cda.readthedocs.io/days_to_death", 'value': "".join([patient_id, subject.days_to_death])})
+                    **{'system': "https://cda.readthedocs.io/days_to_death", 'value': "".join([str(patient_id), str(subject.days_to_death)])})
                 obs_days_to_death.id = patient_transformer.mint_id(identifier=obs_days_to_death_identifier, resource_type="Observation")
                 obs_days_to_death.subject = {"reference": f"Patient/{patient_id}"}
                 obs_days_to_death.focus = [{"reference": f"Patient/{patient_id}"}]
                 observations.append(obs_days_to_death)
 
-            if subject.days_to_birth:
+            if subject.days_to_birth and patient_id:
                 obs_days_to_birth = patient_transformer.observation_days_to_birth(subject.days_to_birth)
                 obs_days_to_birth_identifier = Identifier(
-                    **{'system': "https://cda.readthedocs.io/days_to_birth", 'value': "".join([patient_id, subject.days_to_birth])})
+                    **{'system': "https://cda.readthedocs.io/days_to_birth", 'value': "".join([str(patient_id), str(subject.days_to_birth)])})
                 obs_days_to_birth.id = patient_transformer.mint_id(identifier=obs_days_to_birth_identifier, resource_type="Observation")
                 obs_days_to_birth.subject = {"reference": f"Patient/{patient_id}"}
                 obs_days_to_birth.focus = [{"reference": f"Patient/{patient_id}"}]
