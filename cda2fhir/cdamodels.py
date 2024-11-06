@@ -147,7 +147,7 @@ class CDATreatment(Base):
     treatment_anatomic_site: Mapped[Optional[str]] = mapped_column(String)
     treatment_effect: Mapped[Optional[str]] = mapped_column(String)
     treatment_end_reason: Mapped[Optional[str]] = mapped_column(String)
-    number_of_cycles: Mapped[Optional[str]] = mapped_column(String)
+    number_of_cycles: Mapped[Optional[int]] = mapped_column(Integer)
     integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer)
     researchsubject_treatments: Mapped[List["CDAResearchSubjectTreatment"]] = relationship(
         back_populates="treatment"

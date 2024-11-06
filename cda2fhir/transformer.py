@@ -16,9 +16,12 @@ from fhir.resources.codeableconcept import CodeableConcept
 from fhir.resources.reference import Reference
 from fhir.resources.codeablereference import CodeableReference
 from fhir.resources.condition import Condition, ConditionStage
+from fhir.resources.medication import Medication
+from fhir.resources.substance import Substance
+from fhir.resources.substancedefinition import SubstanceDefinition, SubstanceDefinitionStructure, SubstanceDefinitionStructureRepresentation
 from sqlalchemy.orm import Session
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject, \
-    CDADiagnosis, CDASpecimen, CDAFile
+    CDADiagnosis, CDASpecimen, CDAFile, CDATreatment
 from uuid import uuid3, uuid5, NAMESPACE_DNS
 
 CDA_SITE = 'cda.readthedocs.io'
@@ -992,3 +995,27 @@ class DocumentReferenceTransformer(Transformer):
         group = Group(**{'id': group_id, "identifier": [_identifier], "membership": 'definitional',
                          'member': _members, "type": _type})
         return group
+
+
+class MedicationAdministrationTransformer(Transformer):
+    def __init__(self, session: Session):
+        super().__init__(session)
+        self.session = session
+        self.project_id = 'CDA'
+        self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
+
+    def fetch_chembl_information(self, compounds: list) -> list:
+        return []
+    
+    def fhir_medication_administration(self, cda_treatment: CDATreatment, patient: PatientTransformer) -> dict:
+        return {"medication_administration": "", "medication": "",
+                "substance": "", "substance_defination": ""}
+
+    def create_medication(self, medication) -> Medication:
+        return Medication()
+
+    def create_substance(self) -> Substance:
+        return Substance()
+
+    def create_substance_definition(self) -> SubstanceDefinition:
+        return SubstanceDefinition()

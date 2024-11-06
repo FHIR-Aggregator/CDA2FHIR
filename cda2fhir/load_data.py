@@ -148,7 +148,7 @@ def load_data(transform_files):
                    GDCProgramdbGap, session)
         # if not table_exists(engine, ''):
         load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'Identifier_maps' / 'project_program_relation_summary.csv')),
+            'cda2fhir').parent / 'data' / 'raw' / 'Identifier_maps' / 'project_program_relation_summary_crdc.csv')),
                    CDAProjectRelation, session)
 
         if transform_files:
