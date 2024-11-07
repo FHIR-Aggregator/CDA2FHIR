@@ -1,6 +1,8 @@
 import re
 import uuid
 import logging
+import sqlite3
+from typing import Optional
 from fhir.resources.patient import Patient
 from fhir.resources.specimen import Specimen, SpecimenCollection
 from fhir.resources.identifier import Identifier
@@ -16,13 +18,20 @@ from fhir.resources.codeableconcept import CodeableConcept
 from fhir.resources.reference import Reference
 from fhir.resources.codeablereference import CodeableReference
 from fhir.resources.condition import Condition, ConditionStage
-from fhir.resources.medication import Medication
+from fhir.resources.substancedefinition import SubstanceDefinition, SubstanceDefinitionStructure, \
+    SubstanceDefinitionStructureRepresentation, SubstanceDefinitionName
+from fhir.resources.medication import Medication, MedicationIngredient
+from fhir.resources.medicationadministration import MedicationAdministration, MedicationAdministrationDosage
+from fhir.resources.resource import Resource
 from fhir.resources.substance import Substance
-from fhir.resources.substancedefinition import SubstanceDefinition, SubstanceDefinitionStructure, SubstanceDefinitionStructureRepresentation
+from fhir.resources.quantity import Quantity
+from fhir.resources.timing import Timing, TimingRepeat
+from fhir.resources.range import Range
 from sqlalchemy.orm import Session
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject, \
     CDADiagnosis, CDASpecimen, CDAFile, CDATreatment
 from uuid import uuid3, uuid5, NAMESPACE_DNS
+
 
 CDA_SITE = 'cda.readthedocs.io'
 # global logging
@@ -1003,19 +1012,238 @@ class MedicationAdministrationTransformer(Transformer):
         self.session = session
         self.project_id = 'CDA'
         self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
+        self.SYSTEM_SNOME = 'http://snomed.info/sct'
+        self.SYSTEM_LOINC = 'http://loinc.org'
+        self.SYSTEM_chEMBL = 'https://www.ebi.ac.uk/chembl'
+    @staticmethod
+    def fetch_chembl_data(compounds: list, limit: int) -> list:
+        db_file_path = "data/chembl_34.db"
+        def get_chembl_compound_info(db_file_path, drug_names: list, _limit=limit) -> list:
+            """Query Chembl COMPOUND_RECORDS by COMPOUND_NAME for FHIR Substance"""
+            if len(drug_names) == 1:
+                _drug_names = tuple([x.upper() for x in [drug_names[0], drug_names[0]]])
+            else:
+                _drug_names = tuple([x.upper() for x in drug_names])
 
-    def fetch_chembl_information(self, compounds: list) -> list:
-        return []
-    
-    def fhir_medication_administration(self, cda_treatment: CDATreatment, patient: PatientTransformer) -> dict:
-        return {"medication_administration": "", "medication": "",
-                "substance": "", "substance_defination": ""}
+            query = f"""
+            SELECT DISTINCT 
+                a.CHEMBL_ID,
+                c.STANDARD_INCHI,
+                c.CANONICAL_SMILES,
+                cr.COMPOUND_NAME
+            FROM 
+                MOLECULE_DICTIONARY as a
+            LEFT JOIN 
+                COMPOUND_STRUCTURES as c ON a.MOLREGNO = c.MOLREGNO
+            LEFT JOIN 
+                ACTIVITIES as p ON a.MOLREGNO = p.MOLREGNO
+            LEFT JOIN 
+                compound_records as cr ON a.MOLREGNO = cr.MOLREGNO
+            LEFT JOIN
+                source as sr ON cr.SRC_ID = sr.SRC_ID
+            WHERE cr.COMPOUND_NAME IN {_drug_names}
+            LIMIT {str(_limit)};
+            """
+            conn = sqlite3.connect(db_file_path)
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
 
-    def create_medication(self, medication) -> Medication:
-        return Medication()
+            conn.close()
 
-    def create_substance(self) -> Substance:
-        return Substance()
+            return rows
 
-    def create_substance_definition(self) -> SubstanceDefinition:
-        return SubstanceDefinition()
+    @staticmethod
+    def create_substance_definition_representations(drug_data: list) -> list:
+        representations = []
+        for row in drug_data:
+            if 'STANDARD_INCHI' in row and row['STANDARD_INCHI'] is not None:
+                representations.append(SubstanceDefinitionStructureRepresentation(
+                    **{"representation": row['STANDARD_INCHI'],
+                       "format": CodeableConcept(**{"coding": [{"code": "InChI",
+                                                                "system": 'http://hl7.org/fhir/substance-representation-format',
+                                                                "display": "InChI"}]})}))
+
+            if 'CANONICAL_SMILES' in row and row['CANONICAL_SMILES'] is not None:
+                representations.append(SubstanceDefinitionStructureRepresentation(
+                    **{"representation": row['CANONICAL_SMILES'],
+                       "format": CodeableConcept(**{"coding": [{"code": "SMILES",
+                                                                "system": 'http://hl7.org/fhir/substance-representation-format',
+                                                                "display": "SMILES"}]})}))
+        return representations
+
+    def create_substance_definition(self, compound_name: str, representations: list) -> SubstanceDefinition:
+        sub_def_identifier = Identifier(**{"system": self.SYSTEM_chEMBL, "value": compound_name, "use": "official"})
+        sub_def_id = self.mint_id(identifier=sub_def_identifier, resource_type="SubstanceDefinition")
+
+        return SubstanceDefinition(**{"id": sub_def_id,
+                                      "identifier": [sub_def_identifier],
+                                      "structure": SubstanceDefinitionStructure(**{"representation": representations}),
+                                      "name": [SubstanceDefinitionName(**{"name": compound_name})]
+                                      })
+
+    def create_substance(self, compound_name: str, substance_definition: SubstanceDefinition) -> Substance:
+        code = None
+        if substance_definition:
+            code = CodeableReference(
+                **{"concept": CodeableConcept(**{"coding": [
+                    {"code": compound_name, "system": "/".join([self.SYSTEM_chEMBL, "compound_name"]),
+                     "display": compound_name}]}),
+                   "reference": Reference(**{"reference": f"SubstanceDefinition/{substance_definition.id}"})})
+
+        sub_identifier = Identifier(
+            **{"system": self.SYSTEM_chEMBL, "value": compound_name, "use": "official"})
+        sub_id = self.mint_id(identifier=sub_identifier, resource_type="Substance")
+
+        return Substance(**{"id": sub_id,
+                            "identifier": [sub_identifier],
+                            "instance": True,  # place-holder
+                            "category": [CodeableConcept(**{"coding": [{"code": "drug",
+                                                                        "system": "http://terminology.hl7.org/CodeSystem/substance-category",
+                                                                        "display": "Drug or Medicament"}]})],
+                            "code": code})
+
+    def create_medication(self, compound_name: Optional[str], treatment_type: Optional[str],
+                          _substance: Optional[Substance]) -> Medication:
+
+        if compound_name:
+            if ":" in compound_name:
+                compound_name.replace(":", "_")
+            code = CodeableConcept(**{"coding": [
+                {"code": compound_name, "system": "/".join([self.SYSTEM_chEMBL, "compound_name"]),
+                 "display": compound_name}]})
+
+            med_identifier = Identifier(
+                **{"system": self.SYSTEM_chEMBL, "value": compound_name, "use": "official"})
+        else:
+            if ":" in treatment_type:
+                treatment_type.replace(":", "_")
+
+            code = CodeableConcept(**{
+                "coding": [{"code": treatment_type,
+                            "system": "/".join([f"https://{CDA_SITE}", "treatment_type"]),  # TODO: change
+                            "display": treatment_type}]})
+
+            med_identifier = Identifier(
+                **{"system": f"https://{CDA_SITE}/", "value": treatment_type, "use": "official"})
+
+        med_id = self.mint_id(identifier=med_identifier, resource_type="Medication")
+
+        ingredients = []
+        if _substance:
+            ingredients.append(MedicationIngredient(**{
+                "item": CodeableReference(
+                    **{"reference": Reference(**{"reference": f"Substance/{_substance.id}"})})}))
+
+        return Medication(**{"id": med_id,
+                             "identifier": [med_identifier],
+                             "code": code,
+                             "ingredient": ingredients})
+
+    def create_medication_administration(self, treatment: CDATreatment, patient: CDASubject, drug_chembl_data) -> list[Resource] | []:
+        """
+        creates MedicationAdministration
+            - if treatment type or drug name exists - make MedicationAdministration
+            - if treatment end index days exists, then status -> completed, else status is defined by user
+                (matching fhir requirnments) or unknown
+            - if drug name is null, then Medication.code -> snomed_code: Unknown 261665006
+            - Medication.ingredient.item -> Substance.code -> SubstanceDefinition
+            - status, medication, subject are required by FHIR
+        """
+        assert patient, f"Medication Administration requires the patient information"
+
+        status = None
+        medication = None
+        medication_name = None
+        status_reason = []
+        status_outcome = None
+        med_admin_dosage = None
+        substance = None
+        generated_resources = []
+
+        for compound in drug_chembl_data:
+            if drug_chembl_data:
+                sdr = self.create_substance_definition_representations([compound])
+                if sdr:
+                    sd = self.create_substance_definition(compound_name=compound, representations=sdr)
+                    if sd:
+                        generated_resources.append(sd)
+                        substance = self.create_substance(compound_name=compound, substance_definition=sd)
+                        if substance:
+                            generated_resources.append(substance)
+
+                # not all med have chembl information
+                medication = self.create_medication(compound_name=medication_name, treatment_type=None,
+                                                    _substance=substance,
+                                                    generated_resources=generated_resources)
+                if medication:
+                    print(medication.json())
+                    generated_resources.append(medication)
+
+                if treatment.number_of_cycles:
+                    med_admin_dosage = MedicationAdministrationDosage(**{"rateQuantity":
+                                                                             Quantity(**{"value": int(treatment.number_of_cycles)})})
+                if treatment.treatment_outcome:
+                    status_outcome = CodeableConcept(**{"coding": [{
+                                     "code": treatment.treatment_outcome,
+                                     "system": f"https://{CDA_SITE}",
+                                     "display": treatment.treatment_outcome}]})
+                if treatment.treatment_end_reason:
+                    status_reason = [CodeableConcept(**{"coding": [{
+                                     "code": treatment.treatment_end_reason,
+                                     "system": f"https://{CDA_SITE}",
+                                     "display": treatment.treatment_outcome}]})]
+
+                timing = Timing(**{"repeat": TimingRepeat(**{"boundsRange": Range(**{"low": Quantity(**{"value": 0}),
+                                                                                     "high": Quantity(**{
+                                                                                         "value": 1})})})})  # place holder - required by FHIR
+                if treatment.days_to_treatment_start and treatment.days_to_treatment_end:
+                    timing = Timing(**{"repeat": TimingRepeat(**{"boundsRange": Range(
+                        **{"low": Quantity(**{"value": int(treatment.days_to_treatment_start)}),
+                           "high": Quantity(**{"value": int(treatment.days_to_treatment_end)})})})})
+
+                # add in date notion to identifier
+                medication_admin_identifier = Identifier(
+                    **{"system": self._helper.system, "use": "official", "value": "-".join([patient.id, medication_name])})
+                medication_admin_id = self.mint_id(identifier=medication_admin_identifier,
+                                                   resource_type="MedicationAdministration")
+
+                medication_code = CodeableConcept(**{"coding": [{"code": medication_name,
+                                                                 "system": f"https://{CDA_SITE}/",
+                                                                 "display": medication_name}]})
+
+                if not medication:
+                    med_identifier = Identifier(
+                        **{"system": self._helper.system, "value": medication_name, "use": "official"})
+
+                    med_id = self.mint_id(identifier=med_identifier, resource_type="Medication")
+
+                    code = CodeableConcept(**{
+                        "coding": [{"code": medication_name,
+                                    "system": "/".join([f"https://{CDA_SITE}", "medication"]),
+                                    "display": medication_name}]})
+
+                    medication = Medication(**{"id": med_id,
+                                               "identifier": [med_identifier],
+                                               "code": code})
+
+                medication_codeable_reference = CodeableReference(**{"concept": medication_code, "reference": Reference(
+                    **{"reference": f"Medication/{medication.id}"})})
+
+                data = {"id": medication_admin_id,
+                        "identifier": [medication_admin_identifier],
+                        "status": status,
+                        "statusReason": status_reason,
+                        "medication": medication_codeable_reference,
+                        "subject": {
+                            "reference": f"Patient/{patient.id}"
+                        },
+                        "occurenceTiming": timing,
+                        "dosage": med_admin_dosage}
+
+                med_admin = MedicationAdministration(**data)
+
+                if med_admin:
+                    generated_resources.append(med_admin)
+
+        return generated_resources
