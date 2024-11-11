@@ -43,7 +43,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
     condition_transformer = ConditionTransformer(session)
     specimen_transformer = SpecimenTransformer(session)
     file_transformer = DocumentReferenceTransformer(session, patient_transformer, specimen_transformer)
-    treatment_transformer = MedicationAdministrationTransformer(session)
+    treatment_transformer = MedicationAdministrationTransformer(session, patient_transformer)
 
     if path:
         meta_path = Path(path)

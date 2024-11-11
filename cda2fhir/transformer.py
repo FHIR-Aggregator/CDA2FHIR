@@ -1007,8 +1007,9 @@ class DocumentReferenceTransformer(Transformer):
 
 
 class MedicationAdministrationTransformer(Transformer):
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, patient_transformer: PatientTransformer):
         super().__init__(session)
+        self.patient_transformer = patient_transformer
         self.session = session
         self.project_id = 'CDA'
         self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
@@ -1146,16 +1147,20 @@ class MedicationAdministrationTransformer(Transformer):
                              "code": code,
                              "ingredient": ingredients})
 
-    def create_medication_administration(self, treatment: CDATreatment, patient: CDASubject, medication: Optional[Medication]) -> Optional[MedicationAdministration]:
+    def create_medication_administration(self, treatment: CDATreatment, subject: CDASubject, medication: Optional[Medication]) -> Optional[MedicationAdministration]:
         """
         Creates a MedicationAdministration resource. Defaults to SNOMED "Unknown" if no Medication is provided.
         """
-        assert patient, "Medication Administration requires patient information"
+        assert subject, "Medication Administration requires patient information"
+
+        patient_identifiers = self.patient_transformer.patient_identifier(subject)
+        fhir_patient_id = self.patient_transformer.patient_mintid(patient_identifiers[0])
+
         medication_name = treatment.therapeutic_agent.upper() if treatment.therapeutic_agent else "Unknown"
 
         medication_admin_id = self.mint_id(identifier=Identifier(**{"system": "/".join([f"https://{CDA_SITE}", "treatment"]),
                                                                     "use": "official",
-                                                                    "value": f"{patient.id}-{medication_name}"}),
+                                                                    "value": f"{fhir_patient_id}-{medication_name}"}),
                                            resource_type="MedicationAdministration")
 
         # default value filler - required by FHIR
@@ -1172,7 +1177,7 @@ class MedicationAdministrationTransformer(Transformer):
             "identifier": [{
                 "system": "/".join([f"https://{CDA_SITE}", "treatment"]),
                 "use": "official",
-                "value": f"{patient.id}-{medication_name}"
+                "value": f"{fhir_patient_id}-{medication_name}"
             }],
             "status": "completed" if treatment.days_to_treatment_end else "in-progress",
             "medication": {"concept": {
@@ -1184,7 +1189,7 @@ class MedicationAdministrationTransformer(Transformer):
                 },
                 "reference": medication_reference
             },
-            "subject": {"reference": f"Patient/{patient.id}"},
+            "subject": {"reference": f"Patient/{fhir_patient_id}"},
             "occurenceTiming": timing
         }
 
