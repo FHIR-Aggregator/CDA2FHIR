@@ -123,12 +123,12 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 )
 
                 if _subject_treatment:
-                    for patient in _subject_treatment:
+                    for subject in _subject_treatment:
                         compound_name = treatment.therapeutic_agent.upper() if treatment.therapeutic_agent else None
                         medication = next((med for med in medications if med.code.coding[0].code == compound_name), None)
                         med_admin = treatment_transformer.create_medication_administration(
                             treatment=treatment,
-                            patient=patient,
+                            subject=subject,
                             medication=medication
                         )
 
