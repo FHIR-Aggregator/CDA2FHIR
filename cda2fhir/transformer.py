@@ -46,7 +46,7 @@ logging.getLogger().addHandler(error_handler)
 class Transformer:
     def __init__(self, session: Session):
         self.session = session
-        self.project_id = 'CDA'
+        self.project_id = 'fhir_aggregator-cda'
         self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
 
     @staticmethod
