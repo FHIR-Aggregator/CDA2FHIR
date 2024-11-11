@@ -1015,8 +1015,9 @@ class MedicationAdministrationTransformer(Transformer):
         self.SYSTEM_SNOME = 'http://snomed.info/sct'
         self.SYSTEM_LOINC = 'http://loinc.org'
         self.SYSTEM_chEMBL = 'https://www.ebi.ac.uk/chembl'
+
     @staticmethod
-    def fetch_chembl_data(compounds: list, limit: int) -> list:
+    def fetch_chembl_data(compounds: list, limit: int) -> tuple:
         db_file_path = "data/chembl_34.db"
         def get_chembl_compound_info(db_file_path, drug_names: list, _limit=limit) -> list:
             """Query Chembl COMPOUND_RECORDS by COMPOUND_NAME for FHIR Substance"""
@@ -1044,14 +1045,19 @@ class MedicationAdministrationTransformer(Transformer):
             WHERE cr.COMPOUND_NAME IN {_drug_names}
             LIMIT {str(_limit)};
             """
+
             conn = sqlite3.connect(db_file_path)
             cursor = conn.cursor()
             cursor.execute(query)
             rows = cursor.fetchall()
-
             conn.close()
 
             return rows
+
+        chembl_data = get_chembl_compound_info(db_file_path, compounds, limit)
+        exists = bool(chembl_data)  # true if data is found
+
+        return exists, chembl_data
 
     @staticmethod
     def create_substance_definition_representations(drug_data: list) -> list:
@@ -1140,110 +1146,46 @@ class MedicationAdministrationTransformer(Transformer):
                              "code": code,
                              "ingredient": ingredients})
 
-    def create_medication_administration(self, treatment: CDATreatment, patient: CDASubject, drug_chembl_data) -> list[Resource] | []:
+    def create_medication_administration(self, treatment: CDATreatment, patient: CDASubject, medication: Optional[Medication]) -> Optional[MedicationAdministration]:
         """
-        creates MedicationAdministration
-            - if treatment type or drug name exists - make MedicationAdministration
-            - if treatment end index days exists, then status -> completed, else status is defined by user
-                (matching fhir requirnments) or unknown
-            - if drug name is null, then Medication.code -> snomed_code: Unknown 261665006
-            - Medication.ingredient.item -> Substance.code -> SubstanceDefinition
-            - status, medication, subject are required by FHIR
+        Creates a MedicationAdministration resource. Defaults to SNOMED "Unknown" if no Medication is provided.
         """
-        assert patient, f"Medication Administration requires the patient information"
+        assert patient, "Medication Administration requires patient information"
+        medication_name = treatment.therapeutic_agent.upper() if treatment.therapeutic_agent else "Unknown"
 
-        status = None
-        medication = None
-        medication_name = None
-        status_reason = []
-        status_outcome = None
-        med_admin_dosage = None
-        substance = None
-        generated_resources = []
+        medication_admin_id = self.mint_id(identifier=Identifier(**{"system": "/".join([f"https://{CDA_SITE}", "treatment"]),
+                                                                    "use": "official",
+                                                                    "value": f"{patient.id}-{medication_name}"}),
+                                           resource_type="MedicationAdministration")
 
-        for compound in drug_chembl_data:
-            if drug_chembl_data:
-                sdr = self.create_substance_definition_representations([compound])
-                if sdr:
-                    sd = self.create_substance_definition(compound_name=compound, representations=sdr)
-                    if sd:
-                        generated_resources.append(sd)
-                        substance = self.create_substance(compound_name=compound, substance_definition=sd)
-                        if substance:
-                            generated_resources.append(substance)
+        # default value filler - required by FHIR
+        timing = {"repeat": {"boundsRange": {
+                    "low": {"value": int(treatment.days_to_treatment_start)} if treatment.days_to_treatment_start else {"value": 0},
+                    "high": {"value": int(treatment.days_to_treatment_end)} if treatment.days_to_treatment_end else {"value": 1}}}}
 
-                # not all med have chembl information
-                medication = self.create_medication(compound_name=medication_name, treatment_type=None,
-                                                    _substance=substance,
-                                                    generated_resources=generated_resources)
-                if medication:
-                    print(medication.json())
-                    generated_resources.append(medication)
+        medication_code = "261665006" if medication is None else medication_name
+        medication_display = "Unknown" if medication is None else medication_name
+        medication_reference = {"reference": f"Medication/{medication.id}"} if medication else None
 
-                if treatment.number_of_cycles:
-                    med_admin_dosage = MedicationAdministrationDosage(**{"rateQuantity":
-                                                                             Quantity(**{"value": int(treatment.number_of_cycles)})})
-                if treatment.treatment_outcome:
-                    status_outcome = CodeableConcept(**{"coding": [{
-                                     "code": treatment.treatment_outcome,
-                                     "system": f"https://{CDA_SITE}",
-                                     "display": treatment.treatment_outcome}]})
-                if treatment.treatment_end_reason:
-                    status_reason = [CodeableConcept(**{"coding": [{
-                                     "code": treatment.treatment_end_reason,
-                                     "system": f"https://{CDA_SITE}",
-                                     "display": treatment.treatment_outcome}]})]
+        med_admin = {
+            "id": medication_admin_id,
+            "identifier": [{
+                "system": "/".join([f"https://{CDA_SITE}", "treatment"]),
+                "use": "official",
+                "value": f"{patient.id}-{medication_name}"
+            }],
+            "status": "completed" if treatment.days_to_treatment_end else "in-progress",
+            "medication": {"concept": {
+                    "coding": [{
+                        "code": medication_code,
+                        "system": f"https://{CDA_SITE}/medication",
+                        "display": medication_display
+                    }]
+                },
+                "reference": medication_reference
+            },
+            "subject": {"reference": f"Patient/{patient.id}"},
+            "occurenceTiming": timing
+        }
 
-                timing = Timing(**{"repeat": TimingRepeat(**{"boundsRange": Range(**{"low": Quantity(**{"value": 0}),
-                                                                                     "high": Quantity(**{
-                                                                                         "value": 1})})})})  # place holder - required by FHIR
-                if treatment.days_to_treatment_start and treatment.days_to_treatment_end:
-                    timing = Timing(**{"repeat": TimingRepeat(**{"boundsRange": Range(
-                        **{"low": Quantity(**{"value": int(treatment.days_to_treatment_start)}),
-                           "high": Quantity(**{"value": int(treatment.days_to_treatment_end)})})})})
-
-                # add in date notion to identifier
-                medication_admin_identifier = Identifier(
-                    **{"system": self._helper.system, "use": "official", "value": "-".join([patient.id, medication_name])})
-                medication_admin_id = self.mint_id(identifier=medication_admin_identifier,
-                                                   resource_type="MedicationAdministration")
-
-                medication_code = CodeableConcept(**{"coding": [{"code": medication_name,
-                                                                 "system": f"https://{CDA_SITE}/",
-                                                                 "display": medication_name}]})
-
-                if not medication:
-                    med_identifier = Identifier(
-                        **{"system": self._helper.system, "value": medication_name, "use": "official"})
-
-                    med_id = self.mint_id(identifier=med_identifier, resource_type="Medication")
-
-                    code = CodeableConcept(**{
-                        "coding": [{"code": medication_name,
-                                    "system": "/".join([f"https://{CDA_SITE}", "medication"]),
-                                    "display": medication_name}]})
-
-                    medication = Medication(**{"id": med_id,
-                                               "identifier": [med_identifier],
-                                               "code": code})
-
-                medication_codeable_reference = CodeableReference(**{"concept": medication_code, "reference": Reference(
-                    **{"reference": f"Medication/{medication.id}"})})
-
-                data = {"id": medication_admin_id,
-                        "identifier": [medication_admin_identifier],
-                        "status": status,
-                        "statusReason": status_reason,
-                        "medication": medication_codeable_reference,
-                        "subject": {
-                            "reference": f"Patient/{patient.id}"
-                        },
-                        "occurenceTiming": timing,
-                        "dosage": med_admin_dosage}
-
-                med_admin = MedicationAdministration(**data)
-
-                if med_admin:
-                    generated_resources.append(med_admin)
-
-        return generated_resources
+        return MedicationAdministration(**med_admin)

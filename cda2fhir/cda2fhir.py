@@ -54,18 +54,62 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
     observations = []
 
     try:
-
         # MedicationAdministration and Medication  -----------------------------------
         if transform_treatment:
             treatments = session.query(CDATreatment).all()
             therapeutic_agent_compounds = []
             for treatment in treatments:
-                # list of all possible therapeutic_agent capitalized and queried in CHembl
-                # Query once
+                # list of all possible therapeutic_agent capitalized and queried in CHembl - Query once
                 if treatment.therapeutic_agent:
                     therapeutic_agent_compounds.append(treatment.therapeutic_agent.upper())
             therapeutic_agent_compounds = list(set(therapeutic_agent_compounds))
-            print("======= +++ COMPOUNDS: ", therapeutic_agent_compounds, len(therapeutic_agent_compounds), type(therapeutic_agent_compounds))
+            chembl_data_exists, chembl_data = treatment_transformer.fetch_chembl_data(therapeutic_agent_compounds, limit=10000)
+            compound_results = {compound.upper(): [] for compound in therapeutic_agent_compounds}
+
+            if chembl_data_exists:
+                for record in chembl_data:
+                    compound_name = record[3].upper()
+                    if compound_name in compound_results:
+                        compound_results[compound_name].append(record)
+
+            key_info = ["CHEMBL_ID", "STANDARD_INCHI", "CANONICAL_SMILES", "COMPOUND_NAME"]
+            substance_definations = []
+            substances = []
+            medications = []
+            medication_administrations = []
+            for compound_name, compound_data in compound_results.items():
+                if compound_data:
+                    compound_data = [dict(zip(key_info, row)) for row in compound_data]
+                    sdr = treatment_transformer.create_substance_definition_representations(compound_data)
+                    if sdr:
+                        sd = treatment_transformer.create_substance_definition(compound_name=compound_name, representations=sdr)
+                        if sd:
+                            substance_definations.append(sd)
+                            substance = treatment_transformer.create_substance(compound_name=compound_name, substance_definition=sd)
+                            if substance:
+                                substances.append(substance)
+
+                                medication = treatment_transformer.create_medication(compound_name=compound_name,
+                                                                                     treatment_type=None,
+                                                                                     _substance=substance)
+                                if medication:
+                                    medications.append(medication)
+
+            if save and substance_definations:
+                substance_definations_dict = {sub_def.id: sub_def for sub_def in substance_definations if
+                                     sub_def}.values()
+                fhir_substance_definations = [orjson.loads(sd.json()) for sd in substance_definations_dict if sd]
+                fhir_ndjson(fhir_substance_definations, str(meta_path / "SubstanceDefinition.ndjson"))
+
+            if save and substance_definations:
+                substances_dict = {sub.id: sub for sub in substances if sub}.values()
+                fhir_substances = [orjson.loads(s.json()) for s in substances_dict if s]
+                fhir_ndjson(fhir_substances, str(meta_path / "Substance.ndjson"))
+
+            if save and medications:
+                medications_dict = {med.id: med for med in medications if med}.values()
+                fhir_medications = [orjson.loads(m.json()) for m in medications_dict if m]
+                fhir_ndjson(fhir_medications, str(meta_path / "Medication.ndjson"))
 
             for treatment in treatments:
                 _subject_treatment = (
@@ -79,12 +123,22 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 )
 
                 if _subject_treatment:
-                    _patient_treatment = patient_transformer.transform_human_subjects(_subject_treatment)
-                    if _patient_treatment and _patient_treatment[0].id:
-                        print(f"_patient_treatment {_patient_treatment}")
+                    for patient in _subject_treatment:
+                        compound_name = treatment.therapeutic_agent.upper() if treatment.therapeutic_agent else None
+                        medication = next((med for med in medications if med.code.coding[0].code == compound_name), None)
+                        med_admin = treatment_transformer.create_medication_administration(
+                            treatment=treatment,
+                            patient=patient,
+                            medication=medication
+                        )
 
-            chembl_data = treatment_transformer.fetch_chembl_data(therapeutic_agent_compounds, limit=10000)
-            print("======= +++ CHEMBL COMPOUNDS: ", chembl_data)
+                        if med_admin:
+                            medication_administrations.append(med_admin)
+
+            if save and medication_administrations:
+                medication_administrations_dict = {md.id: md for md in medication_administrations if md}.values()
+                fhir_medication_administrations = [orjson.loads(mdd.json()) for mdd in medication_administrations_dict if mdd]
+                fhir_ndjson(fhir_medication_administrations, str(meta_path / "MedicationAdministration.ndjson"))
 
             if verbose:
                 print("**** treatment:")
@@ -92,7 +146,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     print(f"id: {treatment.id}, therapeutic_agent: {treatment.therapeutic_agent}")
 
         # Specimen and Observation and BodyStructure -----------------------------------
-        if not transform_treatment:
+        if not transform_treatment and not transform_condition and not transform_files:
             if n_samples:
                 n_samples = int(n_samples)
 
