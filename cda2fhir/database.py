@@ -13,8 +13,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db():
+    if os.path.exists(DATABASE_PATH):
+        print("Existing database found. Deleting...")
+        os.remove(DATABASE_PATH)
+
     if not os.path.exists(DATABASE_PATH):
         print("database does not exist. initializing...")
         Base.metadata.create_all(bind=engine)
+
     else:
         print("skipping initialization - database exists. ")
