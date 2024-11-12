@@ -152,6 +152,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
         if transform_mutation:
             mutations = session.query(CDAMutation).all()
             m = []
+            mutation_observations = []
             for mutation in mutations:
                 mutation_subject = (
                     session.query(CDASubject)
@@ -165,6 +166,16 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 })
                 #print(f"mutation ID: {mutation.id}, subject: {[subject.id for subject in mutation_subject]}, "
                 #      f"subject count: {len(mutation_subject)}") #there is one subject per mutation result
+
+                mutation_observation = mutation_transformer.create_mutation_observation(mutation, mutation_subject[0])
+                # print(f"Mutation Observation: {mutation_observation}")
+                mutation_observations.append(mutation_observation)
+
+            if save and mutation_observations:
+                mutation_obs = {mut_obs.id: mut_obs for mut_obs in mutation_observations if mut_obs}.values()
+                fhir_mutation_obs = [orjson.loads(mo.json()) for mo in mutation_obs]
+
+                utils.create_or_extend(new_items=fhir_mutation_obs, folder_path='data/META', resource_type='Observation', update_existing=False)
 
         # Specimen and Observation and BodyStructure -----------------------------------
         if not transform_treatment and not transform_condition and not transform_files:

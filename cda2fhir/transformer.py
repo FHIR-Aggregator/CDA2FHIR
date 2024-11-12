@@ -52,7 +52,6 @@ class Transformer:
     @staticmethod
     def get_component(key, value=None, component_type=None,
                       system=f"https://{CDA_SITE}"):
-        print("SPECIMEN Component :", key, value, component_type)
         if component_type == 'string':
             value = {"valueString": value}
         elif component_type == 'int':
@@ -1208,7 +1207,7 @@ class MutationTransformer(Transformer):
         self.SYSTEM_chEMBL = 'https://www.ebi.ac.uk/chembl'
 
     def create_mutation_observation(self, mutation: CDAMutation, subject: CDASubject) -> Observation:
-        """ """
+        """creates an Observation resource for a given mutation and subject."""
         assert mutation.id, f"mutations must have an id"
         assert subject, "Mutation results requires subject information"
 
@@ -1218,6 +1217,26 @@ class MutationTransformer(Transformer):
         mutation_identifier = Identifier(**{"system": self.SYSTEM_chEMBL, "value": mutation.id, "use": "official"})
         mutation_id = self.mint_id(identifier=mutation_identifier, resource_type="Observation")
         components = []
+
+        for field_name, field_value in vars(mutation).items():
+            if field_name.startswith("_") or field_name in ["id", "integer_id_alias"] or field_value is None:
+                continue
+
+            if isinstance(field_value, int):
+                component_type = "int"
+            elif isinstance(field_value, bool):
+                component_type = "bool"
+            else:
+                component_type = "string"
+
+            component = self.get_component(
+                key=field_name,
+                value=field_value,
+                component_type=component_type,
+                system=f"https://{CDA_SITE}/{field_name}"
+            )
+            if component:
+                components.append(component)
 
         obs = Observation(
             **{
@@ -1248,7 +1267,7 @@ class MutationTransformer(Transformer):
                     "reference": f"Patient/{fhir_patient_id}"
                 },
                 "focus": [{
-                    "reference": f"Patient/{fhir_patient_id}"
+                    "reference": f"Patient/{fhir_patient_id}" #TODO: add specimen
                 }],
                 "component": components
             }
