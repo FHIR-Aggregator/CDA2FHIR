@@ -29,7 +29,7 @@ from fhir.resources.timing import Timing, TimingRepeat
 from fhir.resources.range import Range
 from sqlalchemy.orm import Session
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject, \
-    CDADiagnosis, CDASpecimen, CDAFile, CDATreatment
+    CDADiagnosis, CDASpecimen, CDAFile, CDATreatment, CDAMutation
 from uuid import uuid3, uuid5, NAMESPACE_DNS
 
 
@@ -1194,3 +1194,63 @@ class MedicationAdministrationTransformer(Transformer):
         }
 
         return MedicationAdministration(**med_admin)
+
+
+class MutationTransformer(Transformer):
+    def __init__(self, session: Session, patient_transformer: PatientTransformer):
+        super().__init__(session)
+        self.patient_transformer = patient_transformer
+        self.session = session
+        self.project_id = 'CDA'
+        self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
+        self.SYSTEM_SNOME = 'http://snomed.info/sct'
+        self.SYSTEM_LOINC = 'http://loinc.org'
+        self.SYSTEM_chEMBL = 'https://www.ebi.ac.uk/chembl'
+
+    def create_mutation_observation(self, mutation: CDAMutation, subject: CDASubject) -> Observation:
+        """ """
+        assert mutation.id, f"mutations must have an id"
+        assert subject, "Mutation results requires subject information"
+
+        patient_identifiers = self.patient_transformer.patient_identifier(subject)
+        fhir_patient_id = self.patient_transformer.patient_mintid(patient_identifiers[0])
+
+        mutation_identifier = Identifier(**{"system": self.SYSTEM_chEMBL, "value": mutation.id, "use": "official"})
+        mutation_id = self.mint_id(identifier=mutation_identifier, resource_type="Observation")
+        components = []
+
+        obs = Observation(
+            **{
+                "id": mutation_id,
+                "identifier": [mutation_identifier],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "laboratory",
+                                "display": "Laboratory"
+                            }
+                        ]
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://purl.obolibrary.org/obo/",
+                            "code": "NCIT_C164934",
+                            "display": "Performed Genetic Observation Result Mutation Type Code"
+                        }
+                    ]
+                },
+                "subject": {
+                    "reference": f"Patient/{fhir_patient_id}"
+                },
+                "focus": [{
+                    "reference": f"Patient/{fhir_patient_id}"
+                }],
+                "component": components
+            }
+        )
+        return obs

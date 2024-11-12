@@ -1,5 +1,5 @@
 from typing import Optional, List
-from sqlalchemy import ForeignKey, Integer, String, create_engine, PrimaryKeyConstraint
+from sqlalchemy import ForeignKey, Integer, String, Boolean, create_engine, PrimaryKeyConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase, QueryPropertyDescriptor
 from sqlalchemy.orm import sessionmaker, scoped_session
 from pathlib import Path
@@ -39,6 +39,9 @@ class CDASubject(Base):
         back_populates="subject"
     )
     subject_file_relation: Mapped[List["CDAFileSubject"]] = relationship(
+        back_populates="subject"
+    )
+    subject_mutation_relation: Mapped[List["CDASubjectMutation"]] = relationship(
         back_populates="subject"
     )
 
@@ -295,3 +298,59 @@ class CDAFileSpecimen(Base):
         back_populates="specimen_file_relation"
     )
 
+
+class CDAMutation(Base):
+    __tablename__ = 'mutation'
+    query: QueryPropertyDescriptor = Session.query_property()
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer)
+    project_short_name: Mapped[Optional[str]] = mapped_column(String)
+    hugo_symbol: Mapped[Optional[str]] = mapped_column(String)
+    entrez_gene_id: Mapped[Optional[str]] = mapped_column(String)
+    hotspot: Mapped[Optional[bool]] = mapped_column(Boolean)
+    ncbi_build: Mapped[Optional[str]] = mapped_column(String)
+    chromosome: Mapped[Optional[str]] = mapped_column(String)
+    variant_type: Mapped[Optional[str]] = mapped_column(String)
+    variant_class: Mapped[Optional[str]] = mapped_column(String)
+    reference_allele: Mapped[Optional[str]] = mapped_column(String)
+    match_norm_seq_allele1: Mapped[Optional[str]] = mapped_column(String)
+    match_norm_seq_allele2: Mapped[Optional[str]] = mapped_column(String)
+    tumor_seq_allele1: Mapped[Optional[str]] = mapped_column(String)
+    tumor_seq_allele2: Mapped[Optional[str]] = mapped_column(String)
+    dbsnp_rs: Mapped[Optional[str]] = mapped_column(String)
+    mutation_status: Mapped[Optional[str]] = mapped_column(String)
+    transcript_id: Mapped[Optional[str]] = mapped_column(String)
+    gene: Mapped[Optional[str]] = mapped_column(String)
+    one_consequence: Mapped[Optional[str]] = mapped_column(String)
+    hgnc_id: Mapped[Optional[str]] = mapped_column(String)
+    primary_site: Mapped[Optional[str]] = mapped_column(String)
+    case_barcode: Mapped[Optional[str]] = mapped_column(String)
+    case_id: Mapped[Optional[str]] = mapped_column(String)
+    sample_barcode_tumor: Mapped[Optional[str]] = mapped_column(String)
+    tumor_submitter_uuid: Mapped[Optional[str]] = mapped_column(String)
+    sample_barcode_normal: Mapped[Optional[str]] = mapped_column(String)
+    normal_submitter_uuid: Mapped[Optional[str]] = mapped_column(String)
+    aliquot_barcode_tumor: Mapped[Optional[str]] = mapped_column(String)
+    tumor_aliquot_uuid: Mapped[Optional[str]] = mapped_column(String)
+    aliquot_barcode_normal: Mapped[Optional[str]] = mapped_column(String)
+    matched_norm_aliquot_uuid: Mapped[Optional[str]] = mapped_column(String)
+
+    subject_mutations: Mapped[List["CDASubjectMutation"]] = relationship(
+        back_populates="mutation"
+    )
+
+
+class CDASubjectMutation(Base):
+    __tablename__ = 'subject_mutation'
+    query: QueryPropertyDescriptor = Session.query_property()
+
+    subject_alias: Mapped[int] = mapped_column(ForeignKey("subject_alias_table.subject_alias"), primary_key=True)
+    mutation_alias: Mapped[int] = mapped_column(ForeignKey("mutation.integer_id_alias"), primary_key=True)
+
+    subject: Mapped["CDASubject"] = relationship(
+        back_populates="subject_mutation_relation"
+    )
+    mutation: Mapped["CDAMutation"] = relationship(
+        back_populates="subject_mutations"
+    )

@@ -12,7 +12,8 @@ from cda2fhir.database import init_db, SessionLocal
 from cda2fhir.cdamodels import (CDASubject, CDASubjectResearchSubject, CDAResearchSubject, CDADiagnosis,
                                 CDAResearchSubjectDiagnosis, CDATreatment, CDAResearchSubjectTreatment, CDASubjectAlias,
                                 CDASubjectProject,  CDASpecimen, CDASubjectIdentifier, CDAResearchSubjectSpecimen,
-                                ProjectdbGap, GDCProgramdbGap, CDAProjectRelation, CDAFile, CDAFileSpecimen, CDAFileSubject)
+                                ProjectdbGap, GDCProgramdbGap, CDAProjectRelation, CDAFile, CDAFileSpecimen, CDAFileSubject,
+                                CDAMutation, CDASubjectMutation)
 
 
 def file_size(file_path):
@@ -150,6 +151,14 @@ def load_data(transform_files):
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'Identifier_maps' / 'project_program_relation_summary_crdc.csv')),
                    CDAProjectRelation, session)
+
+        # if not table_exists(engine, 'specimen'):
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'mutation.json')),
+                   CDAMutation, session)
+
+        # if not table_exists(engine, 'specimen'):
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'subject_mutation.json')),
+                   CDASubjectMutation, session)
 
         if transform_files:
 
