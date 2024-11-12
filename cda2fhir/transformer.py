@@ -50,6 +50,41 @@ class Transformer:
         self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
 
     @staticmethod
+    def get_component(key, value=None, component_type=None,
+                      system=f"https://{CDA_SITE}"):
+        print("SPECIMEN Component :", key, value, component_type)
+        if component_type == 'string':
+            value = {"valueString": value}
+        elif component_type == 'int':
+            value = {"valueInteger": value}
+        elif component_type == 'float':
+            value = {"valueQuantity": {"value": value}}
+        elif component_type == 'bool':
+            value = {"valueBoolean": value}
+        elif component_type == 'dateTime':
+            value = {"valueDateTime": value}
+        else:
+            pass
+
+        component = {
+            "code": {
+                "coding": [
+                    {
+                        "system": system,
+                        "code": key,
+                        "display": key
+                    }
+                ],
+                "text": key
+            }
+        }
+
+        if value:
+            component.update(value)
+
+        return component
+
+    @staticmethod
     def is_valid_uuid(value: str) -> bool:
         if value is None:
             return False
@@ -694,41 +729,6 @@ class SpecimenTransformer(Transformer):
             specimen.parent = parent
 
         return specimen
-
-    @staticmethod
-    def get_component(key, value=None, component_type=None,
-                      system=f"https://{CDA_SITE}"):
-        print("SPECIMEN Component :", key, value, component_type)
-        if component_type == 'string':
-            value = {"valueString": value}
-        elif component_type == 'int':
-            value = {"valueInteger": value}
-        elif component_type == 'float':
-            value = {"valueQuantity": {"value": value}}
-        elif component_type == 'bool':
-            value = {"valueBoolean": value}
-        elif component_type == 'dateTime':
-            value = {"valueDateTime": value}
-        else:
-            pass
-
-        component = {
-            "code": {
-                "coding": [
-                    {
-                        "system": system,
-                        "code": key,
-                        "display": key
-                    }
-                ],
-                "text": key
-            }
-        }
-
-        if value:
-            component.update(value)
-
-        return component
 
     def specimen_observation(self, cda_specimen, patient, _specimen_id) -> Observation:
         components = []
