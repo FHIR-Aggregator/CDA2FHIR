@@ -25,9 +25,10 @@ def cli():
 @click.option('-f', '--transform_files', is_flag=True, default=False, required=False, help="Transform CDA files to FHIR DocumentReference and Group.")
 @click.option('-t', '--transform_treatment', is_flag=True, default=False, required=False, help="Transform CDA treatment to all sub-hierarchy of FHIR MedicationAdministration -> SubstanceDefinitionRepresentation.")
 @click.option('-c', '--transform_condition', is_flag=True, default=False, required=False, help="Transform CDA disease to Condition")
+@click.option('-m', '--transform_mutation', is_flag=True, default=False, required=False, help="Transform CDA mutation to Observation")
 @click.option("-p", "--path", default=None,
               help="Path to save the FHIR NDJSON files. default is CDA2FHIR/data/META.")
-def transform(n_samples, n_diagnosis, transform_condition, transform_files, transform_treatment, n_files, save, verbose, path):
+def transform(n_samples, n_diagnosis, transform_condition, transform_files, transform_treatment, transform_mutation, n_files, save, verbose, path):
     assert os.path.exists(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw'))), "Please make sure CDA data is in CDA2FHIR/data/raw directory before pursuing."
 
     if n_samples:
@@ -41,7 +42,7 @@ def transform(n_samples, n_diagnosis, transform_condition, transform_files, tran
         if not os.path.isdir(path):
             raise ValueError(f"Path: '{path}' is not a valid directory.")
 
-    cda2fhir.cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files, transform_treatment, n_files, save, verbose)
+    cda2fhir.cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files, transform_treatment, transform_mutation, n_files, save, verbose)
 
 
 @cli.command('validate')

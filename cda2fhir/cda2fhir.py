@@ -11,9 +11,11 @@ from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, \
     CDASubjectAlias, CDASubjectProject, CDAResearchSubjectDiagnosis, CDASpecimen, ProjectdbGap, GDCProgramdbGap, \
-    CDASubjectIdentifier, CDAProjectRelation, CDAFile, CDAFileSubject, CDAFileSpecimen, CDAResearchSubjectTreatment
+    CDASubjectIdentifier, CDAProjectRelation, CDAFile, CDAFileSubject, CDAFileSpecimen, CDAResearchSubjectTreatment, \
+    CDAMutation, CDASubjectMutation
 from cda2fhir.transformer import PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer, \
-    ConditionTransformer, SpecimenTransformer, DocumentReferenceTransformer, MedicationAdministrationTransformer
+    ConditionTransformer, SpecimenTransformer, DocumentReferenceTransformer, MedicationAdministrationTransformer, \
+    MutationTransformer
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 
@@ -30,7 +32,7 @@ def fhir_ndjson(entity, out_path):
             file.write(json.dumps(entity, ensure_ascii=False))
 
 
-def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files, transform_treatment, n_files, save=True, verbose=False):
+def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files, transform_treatment, transform_mutation, n_files, save=True, verbose=False):
     """CDA2FHIR attempts to transform the baseclass definitions of CDA data defined in cdamodels to query relevant
     information to create FHIR entities: Specimen, ResearchSubject,
     ResearchStudy, Condition, BodyStructure, Observation utilizing transfomer classes."""
@@ -44,6 +46,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
     specimen_transformer = SpecimenTransformer(session)
     file_transformer = DocumentReferenceTransformer(session, patient_transformer, specimen_transformer)
     treatment_transformer = MedicationAdministrationTransformer(session, patient_transformer)
+    mutation_transformer = MutationTransformer(session, patient_transformer)
 
     if path:
         meta_path = Path(path)
@@ -144,6 +147,24 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 print("**** treatment:")
                 for treatment in treatments:
                     print(f"id: {treatment.id}, therapeutic_agent: {treatment.therapeutic_agent}")
+
+        # Mutation to Observation  ---------------------------------------------------
+        if transform_mutation:
+            mutations = session.query(CDAMutation).all()
+            m = []
+            for mutation in mutations:
+                mutation_subject = (
+                    session.query(CDASubject)
+                    .join(CDASubjectMutation, CDASubject.integer_id_alias == CDASubjectMutation.subject_alias)
+                    .filter(CDASubjectMutation.mutation_alias == mutation.integer_id_alias)
+                    .all()
+                )
+                m.append({
+                    "mutation_id": mutation.id,
+                    "subjects": mutation_subject
+                })
+                #print(f"mutation ID: {mutation.id}, subject: {[subject.id for subject in mutation_subject]}, "
+                #      f"subject count: {len(mutation_subject)}") #there is one subject per mutation result
 
         # Specimen and Observation and BodyStructure -----------------------------------
         if not transform_treatment and not transform_condition and not transform_files:

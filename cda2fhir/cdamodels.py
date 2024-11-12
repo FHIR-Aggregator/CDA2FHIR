@@ -42,8 +42,10 @@ class CDASubject(Base):
         back_populates="subject"
     )
     subject_mutation_relation: Mapped[List["CDASubjectMutation"]] = relationship(
+        "CDASubjectMutation",
         back_populates="subject"
     )
+
 
     @property
     def alias_id(self):
@@ -340,17 +342,17 @@ class CDAMutation(Base):
         back_populates="mutation"
     )
 
-
 class CDASubjectMutation(Base):
     __tablename__ = 'subject_mutation'
     query: QueryPropertyDescriptor = Session.query_property()
-
-    subject_alias: Mapped[int] = mapped_column(ForeignKey("subject_alias_table.subject_alias"), primary_key=True)
+    subject_alias: Mapped[int] = mapped_column(ForeignKey("subject.integer_id_alias"), primary_key=True)
     mutation_alias: Mapped[int] = mapped_column(ForeignKey("mutation.integer_id_alias"), primary_key=True)
 
     subject: Mapped["CDASubject"] = relationship(
+        "CDASubject",
         back_populates="subject_mutation_relation"
     )
     mutation: Mapped["CDAMutation"] = relationship(
+        "CDAMutation",
         back_populates="subject_mutations"
     )
