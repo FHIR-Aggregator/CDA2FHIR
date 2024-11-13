@@ -1,5 +1,4 @@
 from cda2fhir import utils
-import json
 import orjson
 from pathlib import Path
 import importlib.resources
@@ -23,15 +22,6 @@ gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDE
                    'OHSU', 'ORGANOID', 'REBC', 'TARGET', 'TCGA', 'TRIO', 'VAREPOP', 'WCDT']
 
 
-def fhir_ndjson(entity, out_path):
-    if isinstance(entity, list):
-        with open(out_path, 'w', encoding='utf8') as file:
-            file.write('\n'.join(map(lambda e: json.dumps(e, ensure_ascii=False), entity)))
-    else:
-        with open(out_path, 'w', encoding='utf8') as file:
-            file.write(json.dumps(entity, ensure_ascii=False))
-
-
 def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files, transform_treatment, transform_mutation, n_files, save=True, verbose=False):
     """CDA2FHIR attempts to transform the baseclass definitions of CDA data defined in cdamodels to query relevant
     information to create FHIR entities: Specimen, ResearchSubject,
@@ -53,8 +43,6 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
     else:
         meta_path = Path(importlib.resources.files('cda2fhir').parent / 'data' / 'META')
         Path(meta_path).mkdir(parents=True, exist_ok=True)
-
-    observations = []
 
     try:
         # MedicationAdministration and Medication  -----------------------------------
@@ -99,20 +87,13 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                     medications.append(medication)
 
             if save and substance_definations:
-                substance_definations_dict = {sub_def.id: sub_def for sub_def in substance_definations if
-                                     sub_def}.values()
-                fhir_substance_definations = [orjson.loads(sd.json()) for sd in substance_definations_dict if sd]
-                fhir_ndjson(fhir_substance_definations, str(meta_path / "SubstanceDefinition.ndjson"))
+                utils.deduplicate_and_save(substance_definations, "SubstanceDefinition.ndjson", meta_path, save)
 
-            if save and substance_definations:
-                substances_dict = {sub.id: sub for sub in substances if sub}.values()
-                fhir_substances = [orjson.loads(s.json()) for s in substances_dict if s]
-                fhir_ndjson(fhir_substances, str(meta_path / "Substance.ndjson"))
+            if save and substances:
+                utils.deduplicate_and_save(substances, "Substance.ndjson", meta_path, save)
 
             if save and medications:
-                medications_dict = {med.id: med for med in medications if med}.values()
-                fhir_medications = [orjson.loads(m.json()) for m in medications_dict if m]
-                fhir_ndjson(fhir_medications, str(meta_path / "Medication.ndjson"))
+                utils.deduplicate_and_save(medications, "Medication.ndjson", meta_path, save)
 
             for treatment in treatments:
                 _subject_treatment = (
@@ -139,16 +120,14 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                             medication_administrations.append(med_admin)
 
             if save and medication_administrations:
-                medication_administrations_dict = {md.id: md for md in medication_administrations if md}.values()
-                fhir_medication_administrations = [orjson.loads(mdd.json()) for mdd in medication_administrations_dict if mdd]
-                fhir_ndjson(fhir_medication_administrations, str(meta_path / "MedicationAdministration.ndjson"))
+                utils.deduplicate_and_save(medication_administrations, "MedicationAdministration.ndjson", meta_path, save)
 
             if verbose:
                 print("**** treatment:")
                 for treatment in treatments:
                     print(f"id: {treatment.id}, therapeutic_agent: {treatment.therapeutic_agent}")
 
-        # Mutation to Observation  ---------------------------------------------------
+        # Mutation 5GB file to Observation  ---------------------------------------------------
         if transform_mutation:
             mutations = session.query(CDAMutation).all()
             m = []
@@ -168,17 +147,16 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 #      f"subject count: {len(mutation_subject)}") #there is one subject per mutation result
 
                 mutation_observation = mutation_transformer.create_mutation_observation(mutation, mutation_subject[0])
-                # print(f"Mutation Observation: {mutation_observation}")
                 mutation_observations.append(mutation_observation)
 
             if save and mutation_observations:
                 mutation_obs = {mut_obs.id: mut_obs for mut_obs in mutation_observations if mut_obs}.values()
                 fhir_mutation_obs = [orjson.loads(mo.json()) for mo in mutation_obs]
-
                 utils.create_or_extend(new_items=fhir_mutation_obs, folder_path='data/META', resource_type='Observation', update_existing=False)
 
         # Specimen and Observation and BodyStructure -----------------------------------
         if not transform_treatment and not transform_condition and not transform_files:
+            observations = []
             if n_samples:
                 n_samples = int(n_samples)
 
@@ -229,15 +207,9 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                             observations.append(_specimen_obs)
 
             if save and fhir_specimens:
-                fhir_specimens = {fs.id: fs for fs in fhir_specimens if
-                                  fs}.values()  # remove duplicates should be a better way
-                _fhir_specimens = [orjson.loads(s.json()) for s in fhir_specimens]
-                fhir_ndjson(_fhir_specimens, str(meta_path / "Specimen.ndjson"))
-
-                fhir_specimen_dbs = {sbd.id: sbd for sbd in specimen_bds if
-                                     sbd}.values()
-                fhir_specimen_dbs = [orjson.loads(s.json()) for s in fhir_specimen_dbs]
-                fhir_ndjson(fhir_specimen_dbs, str(meta_path / "BodyStructure.ndjson"))
+                utils.deduplicate_and_save(fhir_specimens, "Specimen.ndjson", meta_path, save)
+                if specimen_bds:
+                    utils.deduplicate_and_save(specimen_bds, "BodyStructure.ndjson", meta_path, save)
 
             # Patient and Observation -----------------------------------
             subjects = session.query(CDASubject).all()
@@ -265,8 +237,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
             patients = patient_transformer.transform_human_subjects(subjects)
             if save and patients:
-                patients = [orjson.loads(patient.json()) for patient in patients]
-                fhir_ndjson(patients, str(meta_path / "Patient.ndjson"))
+                utils.deduplicate_and_save(patients, "Patient.ndjson", meta_path, save)
 
             for subject in subjects:
                 patient_identifiers = patient_transformer.patient_identifier(subject)
@@ -415,11 +386,11 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                     elif _p.project_icdc == project_name:
                                         _p_name = 'ICDC'
 
-                                    print("Program:", _p.program, "Sub-Program:", _p.sub_program, "GDC:", _p.project_gdc,
-                                          "PDC:", _p.project_pdc,
-                                          "IDC:", _p.project_idc, "CDS:", _p.project_cds, "ICDC:", _p.project_icdc,
-                                          "program_project_match:", _p_name)
-                                    #
+                                    # print("Program:", _p.program, "Sub-Program:", _p.sub_program, "GDC:", _p.project_gdc,
+                                    #       "PDC:", _p.project_pdc,
+                                    #       "IDC:", _p.project_idc, "CDS:", _p.project_cds, "ICDC:", _p.project_icdc,
+                                    #       "program_project_match:", _p_name)
+
                                     if _p.program:
                                         parent_program = research_study_transformer.program_research_study(
                                             name=_p.program)
@@ -452,16 +423,15 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                             research_studies.append(research_study)
 
             if save and research_studies:
-                research_studies = {rstudy.id: rstudy for rstudy in research_studies if
-                                    rstudy}.values()  # remove duplicates should be a better way
-                rs = [orjson.loads(research_study.json()) for research_study in research_studies if research_study]
-                fhir_ndjson(rs, str(meta_path / "ResearchStudy.ndjson"))
+                utils.deduplicate_and_save(research_studies, "ResearchStudy.ndjson", meta_path, save)
 
             if save and research_subjects:
-                research_subjects = {rsubject.id: rsubject for rsubject in research_subjects if
-                                     rsubject}.values()
-                fhir_rsubjects = [orjson.loads(cdarsubject.json()) for cdarsubject in research_subjects if cdarsubject]
-                fhir_ndjson(fhir_rsubjects, str(meta_path / "ResearchSubject.ndjson"))
+                utils.deduplicate_and_save(research_subjects, "ResearchSubject.ndjson", meta_path, save)
+
+            if save and observations:
+                obs_dedup = {_obs.id: _obs for _obs in observations if _obs}.values()
+                fhir_observation = [orjson.loads(_observation.json()) for _observation in obs_dedup]
+                utils.create_or_extend(new_items=fhir_observation, folder_path='data/META', resource_type='Observation', update_existing=False)
 
         # Condition and Observation -----------------------------------
         # randomly choose N diagnosis to reduce runtime for development
@@ -486,6 +456,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             assert diagnoses, "Diagnosis is not defined."
 
             conditions = []
+            condition_observations = []
             for diagnosis in diagnoses:
                 _subject_diagnosis = (
                     session.query(CDASubject)
@@ -516,7 +487,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                                                                                   _patient_diagnosis[0],
                                                                                                   condition.id)
                                         if observation:
-                                            observations.append(observation)
+                                            condition_observations.append(observation)
 
                             if diagnosis.method_of_diagnosis:
                                 obs_method_of_diagnosis = condition_transformer.observation_method_of_diagnosis(diagnosis.method_of_diagnosis)
@@ -527,17 +498,16 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                                                                          resource_type="Observation")
                                 obs_method_of_diagnosis.subject = {"reference": f"Patient/{_patient_diagnosis[0].id}"}
                                 obs_method_of_diagnosis.focus = [{"reference": f"Condition/{condition.id}"}]
-                                observations.append(obs_method_of_diagnosis)
+                                condition_observations.append(obs_method_of_diagnosis)
 
             if save and conditions:
-                _conditions = {_condition.id: _condition for _condition in conditions if _condition}.values()
-                fhir_conditions = [orjson.loads(c.json()) for c in _conditions if c]
-                fhir_ndjson(fhir_conditions, str(meta_path / "Condition.ndjson"))
+                utils.deduplicate_and_save(conditions, "Condition.ndjson", meta_path, save)
 
-            if save and observations:
-                observations = {_obs.id: _obs for _obs in observations if _obs}.values()
-                patient_observations = [orjson.loads(observation.json()) for observation in observations]
-                fhir_ndjson(patient_observations, str(meta_path / "Observation.ndjson"))
+            if save and condition_observations:
+                condition_observations_dedup = {_obs.id: _obs for _obs in condition_observations if _obs}.values()
+                fhir_condition_observation = [orjson.loads(_observation.json()) for _observation in condition_observations_dedup]
+                utils.create_or_extend(new_items=fhir_condition_observation, folder_path='data/META',
+                                       resource_type='Observation', update_existing=False)
 
         # File  -----------------------------------
         # requires pre-processing and validation
@@ -593,16 +563,12 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             if save and all_files:
                 document_references = {_doc_ref.id: _doc_ref for _doc_ref in all_files if _doc_ref}.values()
                 fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in document_references]
-
                 utils.create_or_extend(new_items=fhir_document_references, folder_path='data/META', resource_type='DocumentReference', update_existing=False)
-                # fhir_ndjson(fhir_document_references, str(meta_path / "DocumentReference.ndjson"))
 
             if save and all_groups:
                 groups = {group.id: group for group in all_groups if group.id}.values()
                 fhir_groups = [orjson.loads(group.json()) for group in groups]
-
                 utils.create_or_extend(new_items=fhir_groups, folder_path='data/META', resource_type='Group', update_existing=False)
-                # fhir_ndjson(fhir_groups, str(meta_path / "Group.ndjson"))
 
     finally:
         print("****** Closing Session ******")
