@@ -61,6 +61,66 @@ def load_to_db(paths, table_class, session):
         session.commit()
 
 
+def load_to_db_chunked(path, table_class, session, chunk_size=1000):
+    """try chunk loading"""
+    print(f"####### Processing PATH: {path}")
+    filter_species = {'Human', 'Homo sapiens'}
+    result = mimetypes.guess_type(path, strict=False)[0]
+
+    try:
+        if 'json' in result:
+            with open(path, encoding='utf-8') as f:
+                for i, line in enumerate(f, start=1):
+                    if not line.strip():
+                        continue
+
+                    if i % chunk_size == 0:
+                        session.commit()
+                        session.expire_all()
+
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError as e:
+                        print(f"Skipping malformed JSON on line {i}: {e}")
+                        continue
+
+                    if 'species' in record and record.get("species") not in filter_species:
+                        continue
+
+                    try:
+                        session.add(table_class(**record))
+                    except IntegrityError:
+                        session.rollback()
+                        print(f"Skipping duplicate entry in {table_class.__tablename__}: {record}")
+
+            session.commit() # commit in chunck size
+            session.expire_all() # should have been called by commit (just to make it more explicit)
+
+        # small relational files
+        elif 'spreadsheetml.sheet' in result:
+            df = pd.read_excel(path)
+        elif 'csv' in result:
+            df = pd.read_csv(path)
+        elif 'tab-separated-values' in result:
+            df = pd.read_csv(path, sep='\t')
+
+        for row in df.to_dict(orient='records'):
+            try:
+                session.add(table_class(**row))
+            except IntegrityError:
+                session.rollback()
+                print(f"Skipping duplicate entry in {table_class.__tablename__}: {row}")
+        else:
+            print(f"Unsupported file type for PATH: {path}")
+
+    except Exception as e:
+        print(f"Error processing PATH {path}: {e}")
+        session.rollback()
+
+    session.commit()  # final commit
+    session.expire_all()  # final cleanup
+
+
 def clear_table(table_class, session: Session):
     """clear data from table."""
     session.query(table_class).delete()
@@ -73,7 +133,7 @@ def table_exists(engine, table_name):
     return table_name in inspector.get_table_names()
 
 
-def load_data(transform_files):
+def load_data(transform_condition, transform_files, transform_treatment, transform_mutation):
     """load data into CDA models (call after initialization + change to DB load after CDA transition to DB)"""
     init_db()
     session = SessionLocal()
@@ -98,83 +158,92 @@ def load_data(transform_files):
         # if not table_exists(engine, 'subject'): #TODO: add when relations and tables are defined
         load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'subject.json')),
                    CDASubject, session)
-        # if not table_exists(engine, 'researchsubject'):
+
         load_to_db(
             str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'researchsubject.json')),
             CDAResearchSubject, session)
-        # if not table_exists(engine, ''):
+
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'subject_identifier.json')),
                    CDASubjectIdentifier, session)
-        # if not table_exists(engine, 'subject_researchsubject'):
+
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_researchsubject.tsv')),
                    CDASubjectResearchSubject, session)
-        # if not table_exists(engine, 'diagnosis'):
-        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'diagnosis.json')),
-                   CDADiagnosis, session)
-        # if not table_exists(engine, 'treatment'):
-        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'treatment.json')),
-                   CDATreatment, session)
-        # if not table_exists(engine, 'researchsubject_diagnosis'):
+        if transform_condition:
+
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'diagnosis.json')),
+                       CDADiagnosis, session)
+        if transform_treatment:
+
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'treatment.json')),
+                       CDATreatment, session)
+
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_diagnosis.tsv')),
                    CDAResearchSubjectDiagnosis, session)
-        # if not table_exists(engine, 'researchsubject_treatment'):
+
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_treatment.tsv')),
                    CDAResearchSubjectTreatment, session)
-        # if not table_exists(engine, 'subject_alias_table'):
+
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'alias_files' / 'subject_integer_aliases.tsv')), CDASubjectAlias,
                    session)
-        # if not table_exists(engine, 'subject_project'):
+
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_associated_project.tsv')),
                    CDASubjectProject, session)
-        # if not table_exists(engine, 'specimen'):
-        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'specimen.json')),
-                   CDASpecimen, session)
-        # if not table_exists(engine, 'researchsubject_specimen'):
+        if not transform_mutation and not transform_condition and not transform_files:
+
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'specimen.json')),
+                       CDASpecimen, session)
+
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_specimen.tsv')),
                    CDAResearchSubjectSpecimen, session)
-        # if not table_exists(engine, ''):
+
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'dbgap_to_project' / 'zz61_all_GDC_projects_fully_case-covered_by_dbgap_studies.xlsx')),
                    ProjectdbGap, session)
-        # if not table_exists(engine, ''):
+
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'dbgap_to_project' / 'zz63_all_GDC_programs_fully_case-covered_by_dbgap_studies.xlsx')),
                    GDCProgramdbGap, session)
-        # if not table_exists(engine, ''):
+
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'Identifier_maps' / 'project_program_relation_summary_crdc.csv')),
                    CDAProjectRelation, session)
 
-        # if not table_exists(engine, 'specimen'):
-        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'mutation.json')),
-                   CDAMutation, session)
+        #load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'/'TARGET-WT_mutations.json')), CDAMutation, session)
 
-        # if not table_exists(engine, 'specimen'):
-        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'subject_mutation.json')),
-                   CDASubjectMutation, session)
+        if transform_mutation:
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'/ 'TCGA-LUAD_mutations.json')), CDAMutation, session)
+
+            # mutation_folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'))
+            # mutation_file_paths = glob.glob(os.path.join(mutation_folder_path, '*'))
+            # print("~~~ Globbed mutation files: ", mutation_file_paths)
+            #
+            # load_to_db(mutation_file_paths, CDAMutation, session)
+            #
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'subject_mutation.json')),
+                        CDASubjectMutation, session)
 
         if transform_files:
+            # TODO: can use chunck loading instead of file divvy-up
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files.json')), CDAFile, session)
 
-            folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted'))
-            file_paths = glob.glob(os.path.join(folder_path, '*'))
-            print("Globbed: ", file_paths)
+            # folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted'))
+            # file_paths = glob.glob(os.path.join(folder_path, '*'))
+            # print("Globbed: ", file_paths)
+            #
+            # load_to_db(file_paths, CDAFile, session)
 
-            load_to_db(file_paths, CDAFile, session)
-
-            # if not table_exists(engine, ''):
             # large file - can be useful to reduce the relations files by CDA project as well
             # file alias -> project  join by file id with file_subject
             load_to_db(str(Path(importlib.resources.files(
                 'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_subject.tsv')),
                        CDAFileSubject, session)
-            # if not table_exists(engine, ''):
             load_to_db(str(Path(importlib.resources.files(
                 'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_specimen.tsv')),
                        CDAFileSpecimen, session)
