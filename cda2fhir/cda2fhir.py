@@ -24,9 +24,9 @@ gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDE
 
 def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files, transform_treatment, transform_mutation, n_files, save=True, verbose=False):
     """CDA2FHIR attempts to transform the baseclass definitions of CDA data defined in cdamodels to query relevant
-    information to create FHIR entities: Specimen, ResearchSubject,
-    ResearchStudy, Condition, BodyStructure, Observation utilizing transfomer classes."""
-    load_data(transform_files)
+    information to create FHIR entities: Specimen, ResearchSubject, ResearchStudy, Condition, BodyStructure,
+    Observation, MedicationAdministration, Medication, Substance, SubstanceDefinition utilizing transformer classes."""
+    load_data(transform_condition, transform_files, transform_treatment, transform_mutation)
 
     session = SessionLocal()
     patient_transformer = PatientTransformer(session)
@@ -127,36 +127,45 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 for treatment in treatments:
                     print(f"id: {treatment.id}, therapeutic_agent: {treatment.therapeutic_agent}")
 
+            # expire session after the treatment transformation block to release memory
+            session.expire_all()
+
         # Mutation 5GB file to Observation  ---------------------------------------------------
         if transform_mutation:
-            mutations = session.query(CDAMutation).all()
-            m = []
-            mutation_observations = []
-            for mutation in mutations:
-                mutation_subject = (
-                    session.query(CDASubject)
-                    .join(CDASubjectMutation, CDASubject.integer_id_alias == CDASubjectMutation.subject_alias)
-                    .filter(CDASubjectMutation.mutation_alias == mutation.integer_id_alias)
-                    .all()
-                )
-                m.append({
-                    "mutation_id": mutation.id,
-                    "subjects": mutation_subject
-                })
-                #print(f"mutation ID: {mutation.id}, subject: {[subject.id for subject in mutation_subject]}, "
-                #      f"subject count: {len(mutation_subject)}") #there is one subject per mutation result
+            mutations_query = session.query(CDAMutation)
+            batch_size = 1000 # transform in batches. TODO: could use a smaller batch size
 
-                mutation_observation = mutation_transformer.create_mutation_observation(mutation, mutation_subject[0])
-                mutation_observations.append(mutation_observation)
+            for offset in range(0, mutations_query.count(), batch_size):
+                mutations = mutations_query.offset(offset).limit(batch_size).all() # using offset and limit
+                mutation_observations = []
 
-            if save and mutation_observations:
-                mutation_obs = {mut_obs.id: mut_obs for mut_obs in mutation_observations if mut_obs}.values()
-                fhir_mutation_obs = [orjson.loads(mo.json()) for mo in mutation_obs]
-                utils.create_or_extend(new_items=fhir_mutation_obs, folder_path='data/META', resource_type='Observation', update_existing=False)
+                for mutation in mutations:
+                    mutation_subjects = (
+                        session.query(CDASubject)
+                        .join(CDASubjectMutation, CDASubject.integer_id_alias == CDASubjectMutation.subject_alias)
+                        .filter(CDASubjectMutation.mutation_alias == mutation.integer_id_alias)
+                        .all()
+                    )
+
+                    mutation_observations.append(mutation_transformer.create_mutation_observation(mutation, mutation_subjects[0]))
+
+                if mutation_observations:
+                    fhir_mutation_obs = [orjson.loads(mo.json()) for mo in mutation_observations if mo]
+                    utils.create_or_extend(new_items=fhir_mutation_obs, folder_path='data/META',
+                                           resource_type='Observation', update_existing=False)
+
+                # release memory after each batch
+                session.expire_all()
+
+            # if save and mutation_observations:
+            #     mutation_obs = {mut_obs.id: mut_obs for mut_obs in mutation_observations if mut_obs}.values()
+            #     fhir_mutation_obs = [orjson.loads(mo.json()) for mo in mutation_obs]
+            #     utils.create_or_extend(new_items=fhir_mutation_obs, folder_path='data/META', resource_type='Observation', update_existing=False)
 
         # Specimen and Observation and BodyStructure -----------------------------------
-        if not transform_treatment and not transform_condition and not transform_files:
+        if not transform_treatment and not transform_condition and not transform_files and not transform_mutation:
             observations = []
+            specimens = None
             if n_samples:
                 n_samples = int(n_samples)
 
@@ -433,6 +442,9 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 fhir_observation = [orjson.loads(_observation.json()) for _observation in obs_dedup]
                 utils.create_or_extend(new_items=fhir_observation, folder_path='data/META', resource_type='Observation', update_existing=False)
 
+            # expire session to release memory
+            session.expire_all()
+
         # Condition and Observation -----------------------------------
         # randomly choose N diagnosis to reduce runtime for development
         # takes ~ 2hrs for 1041360+ diagnosis records
@@ -509,9 +521,13 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 utils.create_or_extend(new_items=fhir_condition_observation, folder_path='data/META',
                                        resource_type='Observation', update_existing=False)
 
+            # expire session to release memory
+            session.expire_all()
+
         # File  -----------------------------------
         # requires pre-processing and validation
         # large record set -> 30+ GB takes time
+        #  TODO: in batches
         if transform_files:
             if n_files:
                 n_files = int(n_files)
@@ -569,7 +585,8 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 groups = {group.id: group for group in all_groups if group.id}.values()
                 fhir_groups = [orjson.loads(group.json()) for group in groups]
                 utils.create_or_extend(new_items=fhir_groups, folder_path='data/META', resource_type='Group', update_existing=False)
-
+            # expire session to release memory
+            session.expire_all()
     finally:
         print("****** Closing Session ******")
         session.close()
