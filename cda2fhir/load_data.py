@@ -218,7 +218,8 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
         #load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'/'TARGET-WT_mutations.json')), CDAMutation, session)
 
         if transform_mutation:
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'/ 'TCGA-LUAD_mutations.json')), CDAMutation, session)
+            # load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'/ 'CGCI-BLGSP_mutations.json')), CDAMutation, session)
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'mutation.json')), CDAMutation, session)
 
             # mutation_folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'))
             # mutation_file_paths = glob.glob(os.path.join(mutation_folder_path, '*'))
