@@ -527,66 +527,58 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
         # File  -----------------------------------
         # requires pre-processing and validation
         # large record set -> 30+ GB takes time
-        #  TODO: in batches
+        # TODO: test run
         if transform_files:
-            if n_files:
-                n_files = int(n_files)
-                files = session.execute(
-                    select(CDAFile)
-                    .order_by(func.random())
-                    .limit(n_files)
-                    .options(
-                        selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
-                        selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen)
-                    )
-                ).scalars().all()
-            else:
+            batch_size = 1000
+            total_files = session.query(func.count(CDAFile.id)).scalar()
+
+            for offset in range(0, total_files, batch_size):
                 files = session.query(CDAFile).options(
                     selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
                     selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen)
-                ).all()
+                ).offset(offset).limit(batch_size).all()
 
-            assert files, "Files are not defined."
+                assert files, "No files found in this batch."
 
-            all_files = []
-            all_groups = []
-            for file in files:
-                print(f"File ID: {file.id}, File DRS URI: {file.drs_uri}")
+                all_files = []
+                all_groups = []
+                for file in files:
+                    print(f"File ID: {file.id}, File DRS URI: {file.drs_uri}")
+                    _file_subjects = [
+                        session.query(CDASubject).filter(CDASubject.id == file_subject.subject_id).first()
+                        for file_subject in file.file_subject_relation
+                    ]
+                    _file_subjects = [subject for subject in _file_subjects if subject]
+                    # print(f"++++++++++++++ FILE's SUBJECTS: {[_subject.id for _subject in _file_subjects]}")
 
-                _file_subjects = [
-                    session.query(CDASubject).filter(CDASubject.id == file_subject.subject_id).first()
-                    for file_subject in file.file_subject_relation
-                ]
-                _file_subjects = [subject for subject in _file_subjects if subject]  # remove none
-                print(f"++++++++++++++ FILE's SUBJECTS: {[_subject.id for _subject in _file_subjects]}")
+                    _file_specimens = [
+                        session.query(CDASpecimen).filter(CDASpecimen.id == file_specimen.specimen_id).first()
+                        for file_specimen in file.specimen_file_relation
+                    ]
+                    _file_specimens = [specimen for specimen in _file_specimens if specimen]
+                    # print(f"+++++++++++++ FILE's SPECIMENS: {[_specimen.id for _specimen in _file_specimens]}")
 
-                _file_specimens = [
-                    session.query(CDASpecimen).filter(CDASpecimen.id == file_specimen.specimen_id).first()
-                    for file_specimen in file.specimen_file_relation
-                ]
-                _file_specimens = [specimen for specimen in _file_specimens if specimen]  # remove none
-                print(f"+++++++++++++ FILE's SPECIMENS: {[_specimen.id for _specimen in _file_specimens]}")
+                    fhir_file = file_transformer.fhir_document_reference(file, _file_subjects, _file_specimens)
+                    if fhir_file["DocumentReference"] and isinstance(fhir_file["DocumentReference"], DocumentReference):
+                        all_files.append(fhir_file["DocumentReference"])
 
-                # DocumentReference passing associated CDASubject and CDASpecimen
-                fhir_file = file_transformer.fhir_document_reference(file, _file_subjects, _file_specimens)
-                if fhir_file["DocumentReference"] and isinstance(fhir_file["DocumentReference"], DocumentReference):
-                    all_files.append(fhir_file["DocumentReference"])
+                    if "Group" in fhir_file and isinstance(fhir_file["Group"], Group):
+                        all_groups.append(fhir_file["Group"])
 
-                this_files_group = fhir_file.get("Group")
-                if this_files_group and isinstance(this_files_group, Group):
-                    all_groups.append(this_files_group)
+                if save and all_files:
+                    document_references = {_doc_ref.id: _doc_ref for _doc_ref in all_files if _doc_ref}.values()
+                    fhir_document_references = [orjson.loads(doc_ref.json()) for doc_ref in document_references]
+                    utils.create_or_extend(new_items=fhir_document_references, folder_path='data/META',
+                                           resource_type='DocumentReference', update_existing=False)
 
-            if save and all_files:
-                document_references = {_doc_ref.id: _doc_ref for _doc_ref in all_files if _doc_ref}.values()
-                fhir_document_references = [orjson.loads(document_reference.json()) for document_reference in document_references]
-                utils.create_or_extend(new_items=fhir_document_references, folder_path='data/META', resource_type='DocumentReference', update_existing=False)
+                if save and all_groups:
+                    groups = {group.id: group for group in all_groups if group.id}.values()
+                    fhir_groups = [orjson.loads(group.json()) for group in groups]
+                    utils.create_or_extend(new_items=fhir_groups, folder_path='data/META', resource_type='Group',
+                                           update_existing=False)
+                # expire session for this batch to release memory
+                session.expire_all()
 
-            if save and all_groups:
-                groups = {group.id: group for group in all_groups if group.id}.values()
-                fhir_groups = [orjson.loads(group.json()) for group in groups]
-                utils.create_or_extend(new_items=fhir_groups, folder_path='data/META', resource_type='Group', update_existing=False)
-            # expire session to release memory
-            session.expire_all()
     finally:
         print("****** Closing Session ******")
         session.close()
