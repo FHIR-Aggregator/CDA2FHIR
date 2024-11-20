@@ -2,6 +2,7 @@ from cda2fhir import utils
 import orjson
 from pathlib import Path
 import importlib.resources
+from functools import lru_cache
 from fhir.resources.identifier import Identifier
 from fhir.resources.reference import Reference
 from fhir.resources.documentreference import DocumentReference
@@ -132,22 +133,39 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
         # Mutation 5GB file to Observation  ---------------------------------------------------
         if transform_mutation:
+
             mutations_query = session.query(CDAMutation)
             batch_size = 1000 # transform in batches. TODO: could use a smaller batch size
+
+            # lookup the subjects for a mutation, cache the results
+            @lru_cache(maxsize=None)
+            def lookup_mutation_subjects(_session, integer_id_alias):
+                _mutation_subjects = (
+                    _session.query(CDASubject)
+                    .join(CDASubjectMutation, CDASubject.integer_id_alias == CDASubjectMutation.subject_alias)
+                    .filter(CDASubjectMutation.mutation_alias == integer_id_alias)
+                    .all()
+                )
+                return _mutation_subjects
 
             for offset in range(0, mutations_query.count(), batch_size):
                 mutations = mutations_query.offset(offset).limit(batch_size).all() # using offset and limit
                 mutation_observations = []
 
                 for mutation in mutations:
-                    mutation_subjects = (
-                        session.query(CDASubject)
-                        .join(CDASubjectMutation, CDASubject.integer_id_alias == CDASubjectMutation.subject_alias)
-                        .filter(CDASubjectMutation.mutation_alias == mutation.integer_id_alias)
-                        .all()
-                    )
+                    mutation_subjects = lookup_mutation_subjects(session, mutation.integer_id_alias)
+                    mutation_observations.append(
+                        mutation_transformer.create_mutation_observation(mutation, mutation_subjects[0]))
 
-                    mutation_observations.append(mutation_transformer.create_mutation_observation(mutation, mutation_subjects[0]))
+                # for mutation in mutations:
+                #     mutation_subjects = (
+                #         session.query(CDASubject)
+                #         .join(CDASubjectMutation, CDASubject.integer_id_alias == CDASubjectMutation.subject_alias)
+                #         .filter(CDASubjectMutation.mutation_alias == mutation.integer_id_alias)
+                #         .all()
+                #     )
+                #
+                #     mutation_observations.append(mutation_transformer.create_mutation_observation(mutation, mutation_subjects[0]))
 
                 if mutation_observations:
                     fhir_mutation_obs = [orjson.loads(mo.json()) for mo in mutation_observations if mo]
