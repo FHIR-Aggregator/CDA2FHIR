@@ -58,6 +58,7 @@ def load_to_db(paths, table_class, session):
                     session.rollback()
                     print(f"Skipping duplicate entry in {table_class.__tablename__}: {row}")
 
+        session.flush() # flush changes to the database
         session.commit()
 
 
@@ -93,6 +94,7 @@ def load_to_db_chunked(path, table_class, session, chunk_size=1000):
                         session.rollback()
                         print(f"Skipping duplicate entry in {table_class.__tablename__}: {record}")
 
+            session.flush()
             session.commit() # commit in chunck size
             session.expire_all() # should have been called by commit (just to make it more explicit)
 
@@ -116,7 +118,9 @@ def load_to_db_chunked(path, table_class, session, chunk_size=1000):
     except Exception as e:
         print(f"Error processing PATH {path}: {e}")
         session.rollback()
-
+    # commit should flush beforehand changes https://docs.sqlalchemy.org/en/20/orm/session_api.html#sqlalchemy.orm.Session.commit,
+    # to be safe but
+    session.flush() # flush changes to the database
     session.commit()  # final commit
     session.expire_all()  # final cleanup
 

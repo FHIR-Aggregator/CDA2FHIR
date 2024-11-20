@@ -4,11 +4,24 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase,
 from sqlalchemy.orm import sessionmaker, scoped_session
 from pathlib import Path
 import importlib.resources
+from sqlalchemy.engine import Engine
+from sqlalchemy import event
+
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=OFF")
+    cursor.execute("PRAGMA journal_mode=MEMORY")
+    cursor.close()
+
 
 DATABASE_PATH = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'cda_data.db'))
 DATABASE_URL = f'sqlite:////{DATABASE_PATH}'
 
 e = create_engine(DATABASE_URL, echo=True)
+
+
 Session = scoped_session(sessionmaker(e))
 
 
