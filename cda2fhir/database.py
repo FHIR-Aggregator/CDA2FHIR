@@ -23,6 +23,17 @@ engine = create_engine(DATABASE_URL, echo=True)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+def init_db():
+    data_dir = Path(DATABASE_PATH).parent
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    if os.path.exists(DATABASE_PATH):
+        print("Existing database found. Deleting...")
+        os.remove(DATABASE_PATH)
+
+    print("Initializing database...")
+    Base.metadata.create_all(bind=engine)
+
 
 def init_db():
     if os.path.exists(DATABASE_PATH):
