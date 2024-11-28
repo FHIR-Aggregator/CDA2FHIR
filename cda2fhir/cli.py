@@ -1,3 +1,4 @@
+import json
 import sys
 
 from gen3_tracker.common import ERROR_COLOR, INFO_COLOR
@@ -65,6 +66,11 @@ def validate(debug: bool, path):
         with Halo(text='Validating', spinner='line', placement='right', color='white'):
             result = validate_dir(path)
         click.secho(result.resources, fg=INFO_COLOR, file=sys.stderr)
+        # print exceptions, set exit code to 1 if there are any
+        for _ in result.exceptions:
+            click.secho(f"{_.path}:{_.offset} {_.exception} {json.dumps(_.json_obj, separators=(',', ':'))}", fg=ERROR_COLOR, file=sys.stderr)
+        if result.exceptions:
+            sys.exit(1)
     except Exception as e:
         click.secho(str(e), fg=ERROR_COLOR, file=sys.stderr)
         if debug:
