@@ -858,19 +858,19 @@ class SpecimenTransformer(Transformer):
 
 
 class DocumentReferenceTransformer(Transformer):
-    def __init__(self, session: Session, patient_transformer: PatientTransformer, specimen_transfomer: SpecimenTransformer):
+    def __init__(self, session: Session, specimen_transfomer: SpecimenTransformer):
         super().__init__(session)
         self.session = session
         self.project_id = 'CDA'
         self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
-        self.patient_transformer = patient_transformer
         self.specimen_transformer = specimen_transfomer
 
-    def fhir_document_reference(self, cda_file: CDAFile, patients: list[CDASubject], specimens: list[CDASpecimen]) -> dict:
+    def fhir_document_reference(self, cda_file: CDAFile, specimens: list[CDASpecimen]) -> dict:
 
         category = []
-        subject_reference = None
-        based_on = None
+        # subject_reference = None
+        # based_on = None
+        specimen_reference = None
         _type = None
         category = []
         group = None
@@ -889,36 +889,51 @@ class DocumentReferenceTransformer(Transformer):
         assert _doc_ref_id, f"DocumentReference must have a mint id."
 
         # subjects (patients) and their alias ids -> mint ids
-        patient_fhir_ids = []
-        if patients:
-            for subject in patients:
-                patient_identifiers = self.patient_transformer.patient_identifier(subject)
-
-                fhir_patient_id = self.patient_transformer.patient_mintid(patient_identifiers[0])
-                if fhir_patient_id and self.is_valid_uuid(fhir_patient_id):
-                    patient_fhir_ids.append(fhir_patient_id)
-        if len(patient_fhir_ids) == 1:
-            subject_reference = Reference(**{"reference": f"Patient/{patient_fhir_ids[0]}"})
-        elif len(patient_fhir_ids) > 1:
-            group = self.fhir_group(member_ids=patient_fhir_ids, _type="patient", _identifier=_doc_ref_identifier)
-            subject_reference = Reference(**{"reference": f"Group/{group.id}"})
-        else:
-            logging.error(f"CDA file ID: {cda_file.id} - with patient FHIR ids: {patient_fhir_ids} are not valid mint_ids. "
-                          f"Skipping transformation.")
-            return {"DocumentReference": None, "Group": None}
+        # patient_fhir_ids = []
+        # if patients:
+        #     for subject in patients:
+        #         patient_identifiers = self.patient_transformer.patient_identifier(subject)
+        #
+        #         fhir_patient_id = self.patient_transformer.patient_mintid(patient_identifiers[0])
+        #         if fhir_patient_id and self.is_valid_uuid(fhir_patient_id):
+        #             patient_fhir_ids.append(fhir_patient_id)
+        # if len(patient_fhir_ids) == 1:
+        #     subject_reference = Reference(**{"reference": f"Patient/{patient_fhir_ids[0]}"})
+        # elif len(patient_fhir_ids) > 1:
+        #     group = self.fhir_group(member_ids=patient_fhir_ids, _type="patient", _identifier=_doc_ref_identifier)
+        #     subject_reference = Reference(**{"reference": f"Group/{group.id}"})
+        # else:
+        #     logging.error(f"CDA file ID: {cda_file.id} - with patient FHIR ids: {patient_fhir_ids} are not valid mint_ids. "
+        #                   f"Skipping transformation.")
+        #     return {"DocumentReference": None, "Group": None}
             # raise ValueError("Patient FHIR ids are not valid mint_ids.") # exists the program - instead logging the error
 
         assert _doc_ref_identifier, f"DocumentReference must have an Identifier."
+        # assert specimens, f"DocumentReference must have specimens associated with it."
 
         specimen_fhir_ids = []
+        specimen_cda_ids = []
         if specimens:
             for specimen in specimens:
                 specimen_identifiers = self.specimen_transformer.specimen_identifier(specimen)
                 fhir_specimen_id = self.specimen_transformer.specimen_mintid(specimen_identifiers[0])
                 if fhir_specimen_id and self.is_valid_uuid(fhir_specimen_id):
+                    specimen_cda_ids.append(specimen.id)
                     specimen_fhir_ids.append(fhir_specimen_id)
             if specimen_fhir_ids:
-                based_on = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimen_fhir_ids]
+                specimen_references = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimen_fhir_ids]
+                if len(specimen_references) > 1:
+                    group_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "specimen_group"]),
+                                                     "value": "/".join([_doc_ref_identifier.value] + specimen_cda_ids),
+                                                     "use": "secondary"})
+                    group = self.fhir_group(member_ids=specimen_fhir_ids, _type="specimen",
+                                            _identifier=group_identifier)
+                    specimen_reference = Reference(**{"reference": f"Group/{group.id}"})
+                elif len(specimen_references) == 1:
+                    specimen_reference = specimen_references[0]
+                else:
+                    logging.error(
+                        f"CDA file ID: {cda_file.id} - with patient FHIR ids: {specimen_fhir_ids} are not valid mint_ids. Skipping transformation.")
 
         if cda_file.file_format:
             _type = CodeableConcept(**{"coding":
@@ -963,8 +978,7 @@ class DocumentReferenceTransformer(Transformer):
             "identifier": [_doc_ref_identifier, _doc_ref_dbgap_identifier, _doc_ref_alias_identifier],
             "status": "current",
             "version": "1",
-            "subject": subject_reference,
-            "basedOn": based_on,
+            "subject": specimen_reference,
             "type": _type,
             "category": category,
             "content": [

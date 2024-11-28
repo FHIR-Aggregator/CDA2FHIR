@@ -35,7 +35,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
     research_subject_transformer = ResearchSubjectTransformer(session)
     condition_transformer = ConditionTransformer(session)
     specimen_transformer = SpecimenTransformer(session)
-    file_transformer = DocumentReferenceTransformer(session, patient_transformer, specimen_transformer)
+    file_transformer = DocumentReferenceTransformer(session, specimen_transformer)
     treatment_transformer = MedicationAdministrationTransformer(session, patient_transformer)
     mutation_transformer = MutationTransformer(session, patient_transformer)
 
@@ -548,10 +548,20 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
         # TODO: test run
         if transform_files:
             batch_size = 1000
-            total_files = session.query(func.count(CDAFile.id)).scalar()
+
+            total_files = session.query(func.count(CDAFile.id)).join(CDAFile.specimen_file_relation).scalar()
+            print(f" Total files with specimen relations: {total_files}")
+           # total_files = session.query(func.count(CDAFile.id)).scalar()
 
             for offset in range(0, total_files, batch_size):
-                files = session.query(CDAFile).options(
+
+                # files = session.query(CDAFile).options(
+                #     selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
+                #     selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen)
+                # ).offset(offset).limit(batch_size).all()
+
+                # only process files with specimen relations with .join(CDAFile.specimen_file_relation)
+                files = session.query(CDAFile).join(CDAFile.specimen_file_relation).options(
                     selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
                     selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen)
                 ).offset(offset).limit(batch_size).all()
@@ -562,11 +572,12 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 all_groups = []
                 for file in files:
                     print(f"File ID: {file.id}, File DRS URI: {file.drs_uri}")
-                    _file_subjects = [
-                        session.query(CDASubject).filter(CDASubject.id == file_subject.subject_id).first()
-                        for file_subject in file.file_subject_relation
-                    ]
-                    _file_subjects = [subject for subject in _file_subjects if subject]
+
+                    # _file_subjects = [
+                    #     session.query(CDASubject).filter(CDASubject.id == file_subject.subject_id).first()
+                    #     for file_subject in file.file_subject_relation
+                    # ]
+                    # _file_subjects = [subject for subject in _file_subjects if subject]
                     # print(f"++++++++++++++ FILE's SUBJECTS: {[_subject.id for _subject in _file_subjects]}")
 
                     _file_specimens = [
@@ -574,9 +585,13 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                         for file_specimen in file.specimen_file_relation
                     ]
                     _file_specimens = [specimen for specimen in _file_specimens if specimen]
-                    # print(f"+++++++++++++ FILE's SPECIMENS: {[_specimen.id for _specimen in _file_specimens]}")
 
-                    fhir_file = file_transformer.fhir_document_reference(file, _file_subjects, _file_specimens)
+                    if not _file_specimens:
+                        print(f"------------- No specimens found for File ID: {file.id}. Skipping...")
+                        continue
+
+                    print(f"+++++++++++++ FILE's SPECIMENS: {[_specimen.id for _specimen in _file_specimens]}")
+                    fhir_file = file_transformer.fhir_document_reference(file, _file_specimens)
                     if fhir_file["DocumentReference"] and isinstance(fhir_file["DocumentReference"], DocumentReference):
                         all_files.append(fhir_file["DocumentReference"])
 

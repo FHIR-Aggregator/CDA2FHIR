@@ -236,7 +236,7 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
 
         if transform_files:
             # TODO: can use chunck loading instead of file divvy-up
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files.json')), CDAFile, session)
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'file.0000.json')), CDAFile, session)
 
             # folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted'))
             # file_paths = glob.glob(os.path.join(folder_path, '*'))
@@ -246,9 +246,11 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
 
             # large file - can be useful to reduce the relations files by CDA project as well
             # file alias -> project  join by file id with file_subject
-            load_to_db(str(Path(importlib.resources.files(
-                'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_subject.tsv')),
-                       CDAFileSubject, session)
+
+            # load_to_db(str(Path(importlib.resources.files(
+            #     'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_subject.tsv')),
+            #            CDAFileSubject, session)
+
             load_to_db(str(Path(importlib.resources.files(
                 'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_specimen.tsv')),
                        CDAFileSpecimen, session)
