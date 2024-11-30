@@ -198,7 +198,8 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
         load_to_db(str(Path(importlib.resources.files(
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_associated_project.tsv')),
                    CDASubjectProject, session)
-        if not transform_mutation and not transform_condition and not transform_files:
+
+        if not transform_mutation and not transform_condition:
 
             load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'specimen.json')),
                        CDASpecimen, session)
