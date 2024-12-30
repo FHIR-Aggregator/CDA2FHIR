@@ -1035,8 +1035,9 @@ class MedicationAdministrationTransformer(Transformer):
         db_file_path = "data/chembl_34.db"
         def get_chembl_compound_info(db_file_path, drug_names: list, _limit=limit) -> list:
             """Query Chembl COMPOUND_RECORDS by COMPOUND_NAME for FHIR Substance"""
+            # assert drug_names, "The drug_names list is empty. Please provide at least one drug name."
             if len(drug_names) == 1:
-                _drug_names = tuple([x.upper() for x in [drug_names[0], drug_names[0]]])
+                _drug_names = f"('{drug_names[0].upper()}')"
             else:
                 _drug_names = tuple([x.upper() for x in drug_names])
 
