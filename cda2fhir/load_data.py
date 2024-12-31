@@ -260,7 +260,7 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
 
             load_file_relations(session)
 
-            file_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted'/ 'files_project_ORGANOIDS01_converted.json'))
+            file_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted'/ 'files_project_TCGA-KIRC_converted.json'))
             load_to_db(file_path, CDAFile, session)
 
             file_size_mb = os.path.getsize(file_path) / (1024 ** 2)
