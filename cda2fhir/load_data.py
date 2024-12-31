@@ -142,7 +142,7 @@ def load_file_relations(session):
     Loads file_subject and file_specimen relationships.
     """
     load_to_db(str(Path(importlib.resources.files(
-        'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_subject.tsv')),
+        'cda2fhir').parent / 'data' / 'raw' / 'human_file_subject.tsv')),
                CDAFileSubject, session)
     print(f"Loaded CDAFileSubject relationships")
 
