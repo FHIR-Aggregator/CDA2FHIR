@@ -578,24 +578,45 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             #     .all()
             # )
 
+            # stmt = (
+            #     select(CDAFile)
+            #     .outerjoin(CDAFileSpecimen, CDAFile.id == CDAFileSpecimen.file_id)
+            #     .outerjoin(CDASpecimen, CDAFileSpecimen.specimen_id == CDASpecimen.id)
+            #     .outerjoin(specimen_subject_alias, CDASpecimen.derived_from_subject == specimen_subject_alias.id)
+            #     .filter(
+            #         and_(
+            #             CDASpecimen.derived_from_subject.isnot(None),
+            #             specimen_subject_alias.species.in_({'Human', 'Homo sapiens'}),
+            #         )
+            #     )
+            #     .options(
+            #         contains_eager(CDAFile.specimen_file_relation),
+            #     )
+            # )
+            #
+            # files = session.execute(stmt).unique().scalars().all() # eager loading causes memory usage with duplicate results
+
+            file_subject_alias = aliased(CDASubject)
             specimen_subject_alias = aliased(CDASubject)
 
             stmt = (
                 select(CDAFile)
                 .outerjoin(CDAFileSpecimen, CDAFile.id == CDAFileSpecimen.file_id)
                 .outerjoin(CDASpecimen, CDAFileSpecimen.specimen_id == CDASpecimen.id)
+                .outerjoin(CDAFileSubject, CDAFile.id == CDAFileSubject.file_id)
+                .outerjoin(file_subject_alias, CDAFileSubject.subject_id == file_subject_alias.id)
                 .outerjoin(specimen_subject_alias, CDASpecimen.derived_from_subject == specimen_subject_alias.id)
                 .filter(
-                    and_(
+                    or_(
+                        file_subject_alias.species.in_({'Human', 'Homo sapiens'}),
                         CDASpecimen.derived_from_subject.isnot(None),
-                        specimen_subject_alias.species.in_({'Human', 'Homo sapiens'}),
+                        and_(
+                            CDASpecimen.derived_from_subject.isnot(None),
+                            specimen_subject_alias.species.in_({'Human', 'Homo sapiens'}),
+                        ),
                     )
                 )
-                .options(
-                    contains_eager(CDAFile.specimen_file_relation),
-                )
             )
-
             files = session.execute(stmt).scalars().all()
 
             if not files:
