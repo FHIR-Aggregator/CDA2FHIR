@@ -35,7 +35,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
     research_subject_transformer = ResearchSubjectTransformer(session)
     condition_transformer = ConditionTransformer(session)
     specimen_transformer = SpecimenTransformer(session)
-    file_transformer = DocumentReferenceTransformer(session, specimen_transformer)
+    file_transformer = DocumentReferenceTransformer(session, patient_transformer, specimen_transformer)
     treatment_transformer = MedicationAdministrationTransformer(session, patient_transformer)
     mutation_transformer = MutationTransformer(session, patient_transformer)
 
@@ -557,14 +557,42 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     if file_specimen.specimen
                 ]
 
+            @lru_cache(maxsize=100)
+            def lookup_file_subjects(_file):
+                return [
+                    file_subject.subject
+                    for file_subject in _file.file_subject_relation
+                    if file_subject.subject
+                ]
+
+            # files = (
+            #     session.query(CDAFile)
+            #     .join(CDAFileSpecimen, CDAFile.id == CDAFileSpecimen.file_id)
+            #     .join(CDASpecimen, CDAFileSpecimen.specimen_id == CDASpecimen.id)
+            #     # .filter(CDASpecimen.id.isnot(None))
+            #     .options(
+            #         selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
+            #         selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen),
+            #     )
+            #     .all()
+            # )
+
             files = (
                 session.query(CDAFile)
-                .join(CDAFileSpecimen, CDAFile.id == CDAFileSpecimen.file_id)
-                .join(CDASpecimen, CDAFileSpecimen.specimen_id == CDASpecimen.id)
-                .filter(CDASpecimen.id.isnot(None))
+                .outerjoin(CDAFileSpecimen, CDAFile.id == CDAFileSpecimen.file_id)
+                .outerjoin(CDASpecimen, CDAFileSpecimen.specimen_id == CDASpecimen.id)
+                .outerjoin(CDAFileSubject, CDAFile.id == CDAFileSubject.file_id)
+                .outerjoin(CDASubject, CDAFileSubject.subject_id == CDASubject.id)
                 .options(
                     selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
                     selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen),
+                )
+                .filter(
+                    # at least one valid subject or specimen
+                    or_(
+                        CDAFile.file_subject_relation.any(),
+                        CDAFile.specimen_file_relation.any()
+                    )
                 )
                 .all()
             )
@@ -581,11 +609,14 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     _file_specimens = lookup_file_specimens(file)
                     print(f"Specimen relation: {file.specimen_file_relation}")
 
-                    if not _file_specimens:
-                        print(f"------------- No specimens found for File ID: {file.id}. Skipping...")
-                        continue
+                    # if not _file_specimens:
+                    #     print(f"------------- No specimens found for File ID: {file.id}. Skipping...")
+                    #     continue
 
-                    fhir_file = file_transformer.fhir_document_reference(file, _file_specimens)
+                    _file_subjects = lookup_file_subjects(file)
+                    print(f"Subject relation: {file.file_subject_relation}")
+
+                    fhir_file = file_transformer.fhir_document_reference(file, _file_subjects, _file_specimens)
                     if fhir_file["DocumentReference"] and isinstance(fhir_file["DocumentReference"], DocumentReference):
                         all_files.append(fhir_file["DocumentReference"])
 
