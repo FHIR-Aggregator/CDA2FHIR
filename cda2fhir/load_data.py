@@ -137,6 +137,21 @@ def table_exists(engine, table_name):
     return table_name in inspector.get_table_names()
 
 
+def load_file_relations(session):
+    """
+    Loads file_subject and file_specimen relationships.
+    """
+    load_to_db(str(Path(importlib.resources.files(
+        'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_subject.tsv')),
+               CDAFileSubject, session)
+    print(f"Loaded CDAFileSubject relationships")
+
+    load_to_db(str(Path(importlib.resources.files(
+        'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_specimen.tsv')),
+               CDAFileSpecimen, session)
+    print(f"Loaded CDAFileSpecimen relationships")
+
+
 def load_data(transform_condition, transform_files, transform_treatment, transform_mutation):
     """load data into CDA models (call after initialization + change to DB load after CDA transition to DB)"""
     init_db()
@@ -236,25 +251,28 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
                         CDASubjectMutation, session)
 
         if transform_files:
-            # TODO: can use chunck loading instead of file divvy-up
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'file.0000.json')), CDAFile, session)
+
+            files_dir = Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted')
+            file_paths = list(files_dir.glob('*'))  # glob all files in the directory
+
+            if not file_paths:
+                raise ValueError("Project-specific files were not found.")
+
+            load_file_relations(session)
+
+            file_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted'/ 'files_project_ORGANOIDS01_converted.json'))
+            load_to_db(file_path, CDAFile, session)
+
+            file_size_mb = os.path.getsize(file_path) / (1024 ** 2)
+            print(f"File: {file_path}, Size: {file_size_mb:.2f} MB")
 
             # folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted'))
             # file_paths = glob.glob(os.path.join(folder_path, '*'))
             # print("Globbed: ", file_paths)
-            #
             # load_to_db(file_paths, CDAFile, session)
 
             # large file - can be useful to reduce the relations files by CDA project as well
             # file alias -> project  join by file id with file_subject
-
-            # load_to_db(str(Path(importlib.resources.files(
-            #     'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_subject.tsv')),
-            #            CDAFileSubject, session)
-
-            load_to_db(str(Path(importlib.resources.files(
-                'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_specimen.tsv')),
-                       CDAFileSpecimen, session)
 
     finally:
         session.expire_all()
