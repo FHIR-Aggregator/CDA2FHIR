@@ -16,8 +16,9 @@ from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearc
 from cda2fhir.transformer import PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer, \
     ConditionTransformer, SpecimenTransformer, DocumentReferenceTransformer, MedicationAdministrationTransformer, \
     MutationTransformer
-from sqlalchemy import select, func, or_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, func, or_,  and_
+from sqlalchemy.orm import aliased
+from sqlalchemy.orm import contains_eager
 
 gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDERS', 'FM', 'HCMI', 'MMRF', 'NCICCR',
                    'OHSU', 'ORGANOID', 'REBC', 'TARGET', 'TCGA', 'TRIO', 'VAREPOP', 'WCDT']
@@ -577,65 +578,66 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             #     .all()
             # )
 
-            files = (
-                session.query(CDAFile)
+            specimen_subject_alias = aliased(CDASubject)
+
+            stmt = (
+                select(CDAFile)
                 .outerjoin(CDAFileSpecimen, CDAFile.id == CDAFileSpecimen.file_id)
                 .outerjoin(CDASpecimen, CDAFileSpecimen.specimen_id == CDASpecimen.id)
-                .outerjoin(CDAFileSubject, CDAFile.id == CDAFileSubject.file_id)
-                .outerjoin(CDASubject, CDAFileSubject.subject_id == CDASubject.id)
-                .options(
-                    selectinload(CDAFile.file_subject_relation).selectinload(CDAFileSubject.subject),
-                    selectinload(CDAFile.specimen_file_relation).selectinload(CDAFileSpecimen.specimen),
-                )
+                .outerjoin(specimen_subject_alias, CDASpecimen.derived_from_subject == specimen_subject_alias.id)
                 .filter(
-                    # at least one valid subject or specimen
-                    or_(
-                        CDAFile.file_subject_relation.any(),
-                        CDAFile.specimen_file_relation.any()
+                    and_(
+                        CDASpecimen.derived_from_subject.isnot(None),
+                        specimen_subject_alias.species.in_({'Human', 'Homo sapiens'}),
                     )
                 )
-                .all()
+                .options(
+                    contains_eager(CDAFile.specimen_file_relation),
+                )
             )
 
+            files = session.execute(stmt).scalars().all()
+
             if not files:
-                raise ValueError("No valid files found.")
-
-            for offset in range(0, len(files), batch_size):
-                all_files = []
-                all_groups = []
+                print("No valid files found. Skipping file transformation.")
                 session.expire_all()
-                for file in files:
-                    print(f"File ID: {file.id}, File DRS URI: {file.drs_uri}")
-                    _file_specimens = lookup_file_specimens(file)
-                    print(f"Specimen relation: {file.specimen_file_relation}")
+            else:
+                for offset in range(0, len(files), batch_size):
+                    all_files = []
+                    all_groups = []
+                    session.expire_all()
+                    for file in files:
+                        print(f"File ID: {file.id}, File DRS URI: {file.drs_uri}")
+                        _file_specimens = lookup_file_specimens(file)
+                        print(f"Specimen relation: {file.specimen_file_relation}")
 
-                    # if not _file_specimens:
-                    #     print(f"------------- No specimens found for File ID: {file.id}. Skipping...")
-                    #     continue
+                        # if not _file_specimens:
+                        #     print(f"------------- No specimens found for File ID: {file.id}. Skipping...")
+                        #     continue
 
-                    _file_subjects = lookup_file_subjects(file)
-                    print(f"Subject relation: {file.file_subject_relation}")
+                        _file_subjects = lookup_file_subjects(file)
+                        print(f"Subject relation: {file.file_subject_relation}")
 
-                    fhir_file = file_transformer.fhir_document_reference(file, _file_subjects, _file_specimens)
-                    if fhir_file["DocumentReference"] and isinstance(fhir_file["DocumentReference"], DocumentReference):
-                        all_files.append(fhir_file["DocumentReference"])
+                        fhir_file = file_transformer.fhir_document_reference(file, _file_subjects, _file_specimens)
+                        if fhir_file["DocumentReference"] and isinstance(fhir_file["DocumentReference"], DocumentReference):
+                            all_files.append(fhir_file["DocumentReference"])
 
-                    if "Group" in fhir_file and isinstance(fhir_file["Group"], Group):
-                        all_groups.append(fhir_file["Group"])
+                        if "Group" in fhir_file and isinstance(fhir_file["Group"], Group):
+                            all_groups.append(fhir_file["Group"])
 
-                if save and all_files:
-                    document_references = {_doc_ref.id: _doc_ref for _doc_ref in all_files if _doc_ref}.values()
-                    fhir_document_references = [orjson.loads(doc_ref.json()) for doc_ref in document_references]
-                    utils.create_or_extend(new_items=fhir_document_references, folder_path='data/META',
-                                           resource_type='DocumentReference', update_existing=False)
+                    if save and all_files:
+                        document_references = {_doc_ref.id: _doc_ref for _doc_ref in all_files if _doc_ref}.values()
+                        fhir_document_references = [orjson.loads(doc_ref.json()) for doc_ref in document_references]
+                        utils.create_or_extend(new_items=fhir_document_references, folder_path='data/META',
+                                               resource_type='DocumentReference', update_existing=False)
 
-                if save and all_groups:
-                    groups = {group.id: group for group in all_groups if group.id}.values()
-                    fhir_groups = [orjson.loads(group.json()) for group in groups]
-                    utils.create_or_extend(new_items=fhir_groups, folder_path='data/META', resource_type='Group',
-                                           update_existing=False)
-                # expire session for this batch to release memory
-                session.expire_all()
+                    if save and all_groups:
+                        groups = {group.id: group for group in all_groups if group.id}.values()
+                        fhir_groups = [orjson.loads(group.json()) for group in groups]
+                        utils.create_or_extend(new_items=fhir_groups, folder_path='data/META', resource_type='Group',
+                                               update_existing=False)
+                    # expire session for this batch to release memory
+                    session.expire_all()
 
     finally:
         print("****** Closing Session ******")
