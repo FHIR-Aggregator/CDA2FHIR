@@ -4,6 +4,7 @@ import os
 import orjson
 import pandas as pd
 from fhir.resources import get_fhir_model_class
+from pathlib import Path
 
 
 def is_gzipped(file_path):
@@ -269,3 +270,19 @@ def create_or_extend(new_items, folder_path='META', resource_type='Observation',
             print(f"{file_name} has been extended, without updating existing data.")
     else:
         print(f"{file_name} has been created.")
+
+
+def fhir_ndjson(entity, out_path):
+    if isinstance(entity, list):
+        with open(out_path, 'w', encoding='utf8') as file:
+            file.write('\n'.join(map(lambda e: json.dumps(e, ensure_ascii=False), entity)))
+    else:
+        with open(out_path, 'w', encoding='utf8') as file:
+            file.write(json.dumps(entity, ensure_ascii=False))
+
+
+def deduplicate_and_save(entities, filename, meta_path, save=True):
+    if save and entities:
+        unique_entities = {entity.id: entity for entity in entities if entity}.values()
+        fhir_entities_json = [orjson.loads(entity.json()) for entity in unique_entities]
+        fhir_ndjson(fhir_entities_json, str(Path(meta_path) / filename))

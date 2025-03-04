@@ -4,6 +4,8 @@ WORKDIR /app
 
 COPY . /app/CDA2FHIR
 
+WORKDIR /app/CDA2FHIR
+
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
@@ -15,5 +17,8 @@ RUN pip install --upgrade pip && \
     sqlalchemy==2.0.31 gen3-tracker>=0.0.7rc1
 
 RUN pip install -e /app/CDA2FHIR
+
+RUN mkdir -p /app/CDA2FHIR/data/raw
+RUN mkdir -p /app/CDA2FHIR/data/META
 
 ENTRYPOINT ["/bin/bash"]
