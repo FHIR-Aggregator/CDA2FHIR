@@ -26,16 +26,22 @@ To run the transformer, ensure that [CDA](https://cda.readthedocs.io/en/latest/)
 Usage: cda2fhir transform [OPTIONS]
 
 Options:
-  -s, --save               Save FHIR ndjson to CDA2FHIR/data/META folder.
-                           [default: True]
+  -s, --save                 Save FHIR ndjson to CDA2FHIR/data/META folder.
+                             [default: True]
   -v, --verbose
-  -ns, --n_samples TEXT    Number of samples to randomly select - max 100.
-  -nd, --n_diagnosis TEXT  Number of diagnosis to randomly select - max 100.
-  -nf, --n_files TEXT      Number of files to randomly select - max 100.
-  -f, --transform_files    Transform CDA files to FHIR DocumentReference and Group.
-  -p, --path TEXT          Path to save the FHIR NDJSON files. default is
-                           CDA2FHIR/data/META.
-  --help                   Show this message and exit.
+  -ns, --n_samples TEXT      Number of samples to randomly select - max 100.
+  -nd, --n_diagnosis TEXT    Number of diagnosis to randomly select - max 100.
+  -nf, --n_files TEXT        Number of files to randomly select - max 100.
+  -f, --transform_files      Transform CDA files to FHIR DocumentReference and
+                             Group.
+  -t, --transform_treatment  Transform CDA treatment to all sub-hierarchy of
+                             FHIR MedicationAdministration ->
+                             SubstanceDefinitionRepresentation.
+  -c, --transform_condition  Transform CDA disease to Condition
+  -m, --transform_mutation   Transform CDA mutation to Observation
+  -p, --path TEXT            Path to save the FHIR NDJSON files. default is
+                             CDA2FHIR/data/META.
+  --help                     Show this message and exit.
 ``` 
 
 - example 

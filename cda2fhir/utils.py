@@ -2,9 +2,13 @@ import json
 import gzip
 import os
 import orjson
+import decimal
+import importlib
 import pandas as pd
-from fhir.resources import get_fhir_model_class
 from pathlib import Path
+from fhir.resources import get_fhir_model_class
+from fhir.resources.fhirresourcemodel import FHIRAbstractModel
+
 
 
 def is_gzipped(file_path):
@@ -283,6 +287,132 @@ def fhir_ndjson(entity, out_path):
 
 def deduplicate_and_save(entities, filename, meta_path, save=True):
     if save and entities:
-        unique_entities = {entity.id: entity for entity in entities if entity}.values()
-        fhir_entities_json = [orjson.loads(entity.json()) for entity in unique_entities]
-        fhir_ndjson(fhir_entities_json, str(Path(meta_path) / filename))
+        # unique_entities = {entity.id: entity for entity in entities if entity}.values()
+        # fhir_entities_json = [orjson.loads(entity.json()) for entity in unique_entities]
+        fhir_ndjson(entities, str(Path(meta_path) / filename))
+
+
+def remove_empty_dicts(data):
+    """
+    Recursively remove empty dictionaries and lists from nested data structures.
+    """
+    if isinstance(data, dict):
+        new_data = {}
+        for k, v in data.items():
+            if isinstance(v, (dict, list)):
+                cleaned = remove_empty_dicts(v)
+                # keep non-empty structures or zero
+                if cleaned or cleaned == 0:
+                    new_data[k] = cleaned
+            # keep values that are not empty or zero
+            elif v or v == 0:
+                new_data[k] = v
+        return new_data
+
+    elif isinstance(data, list):
+        cleaned_list = [remove_empty_dicts(item) for item in data]
+        cleaned_list = [item for item in cleaned_list if item or item == 0]  # remove empty items
+        return cleaned_list if cleaned_list else None  # return none if list is empty
+
+    else:
+        return data
+
+
+def validate_fhir_resource_from_type(resource_type: str, resource_data: dict) -> FHIRAbstractModel:
+    """
+    Generalized function to validate any FHIR resource type using its name.
+    """
+    try:
+        resource_module = importlib.import_module(f"fhir.resources.{resource_type.lower()}")
+        resource_class = getattr(resource_module, resource_type)
+        return resource_class.model_validate(resource_data)
+
+    except (ImportError, AttributeError) as e:
+        raise ValueError(f"Invalid resource type: {resource_type}. Error: {str(e)}")
+
+
+def convert_decimal_to_float(data):
+    """Convert pydantic Decimal to float"""
+    if isinstance(data, dict):
+        return {k: convert_decimal_to_float(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [convert_decimal_to_float(item) for item in data]
+    elif isinstance(data, decimal.Decimal):
+        return float(data)
+    else:
+        return data
+
+
+def convert_value_to_float(data):
+    """
+    Recursively converts all general 'entity' -> 'value' fields in a nested dictionary or list
+    from strings to float or int.
+    """
+    if isinstance(data, list):
+        return [convert_value_to_float(item) for item in data]
+    elif isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, dict) and 'value' in value:
+                if isinstance(value['value'], str):
+                    if value['value'].replace('.', '').replace('-', '', 1).isdigit() and "." in value['value']:
+                        value['value'] = float(value['value'])
+                    elif value['value'].replace('.', '').replace('-', '', 1).isdigit() and "." not in value['value']:
+                        value['value'] = int(value['value'])
+            else:
+                data[key] = convert_value_to_float(value)
+    return data
+
+
+# def clean_resources(entities):
+#     cleaned_resource = []
+#     for resource in entities:
+#         resource_type = resource["resourceType"]
+#         cleaned_resource_dict = remove_empty_dicts(resource)
+#         try:
+#             validated_resource = validate_fhir_resource_from_type(resource_type, cleaned_resource_dict).model_dump_json()
+#         except ValueError as e:
+#             print(f"Validation failed for {resource_type}: {e}")
+#             continue
+#         # handle pydantic Decimal cases
+#         validated_resource = convert_decimal_to_float(orjson.loads(validated_resource))
+#         validated_resource = convert_value_to_float(validated_resource)
+#         validated_resource = orjson.loads(orjson.dumps(validated_resource).decode("utf-8"))
+#         cleaned_resource.append(validated_resource)
+#
+#     return cleaned_resource
+
+def clean_resources(entities):
+    cleaned_resource = []
+    for resource in entities:
+        if hasattr(resource, "dict"):
+            resource_dict = resource.dict()
+        else:
+            resource_dict = resource
+
+        resource_type = resource_dict["resourceType"]
+        cleaned_resource_dict = remove_empty_dicts(resource_dict)
+        try:
+            validated_resource = validate_fhir_resource_from_type(resource_type, cleaned_resource_dict).model_dump_json()
+        except ValueError as e:
+            print(f"Validation failed for {resource_type}: {e}")
+            continue
+
+        # Handle pydantic Decimal cases
+        validated_resource = convert_decimal_to_float(orjson.loads(validated_resource))
+        validated_resource = convert_value_to_float(validated_resource)
+        validated_resource = orjson.loads(orjson.dumps(validated_resource).decode("utf-8"))
+        cleaned_resource.append(validated_resource)
+
+    return cleaned_resource
+
+def deduplicate_entities(_entities):
+    return list({v['id']: v for v in _entities}.values())
+
+def load_list_entities(fhir_objects_list):
+    entity_list = []
+    for entity in fhir_objects_list:
+        if entity:
+            e = orjson.loads(entity.model_dump_json())
+            entity_list.append(e)
+
+    return deduplicate_entities(entity_list)

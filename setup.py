@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-__version__ = '1.3.1'
+__version__ = '1.4.0'
 
 setup(
     name='cda2fhir',
@@ -30,7 +30,7 @@ setup(
         'inflection',
         'iteration_utilities',
         'gen3-tracker>=0.0.7rc2',
-        'fhir.resources>=7.1.0',  # FHIR® (Release R5, version 5.0.0)
+        'fhir.resources==8.0.0b4',  # FHIR® (Release R5, version 5.0.0)
         'sqlalchemy>=2.0.31'
     ],
     # package_data={'cda2fhir': []},
@@ -38,7 +38,7 @@ setup(
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
         'License :: OSI Approved :: MIT License',
         'Intended Audience :: Developers',
         'Intended Audience :: Science/Research',

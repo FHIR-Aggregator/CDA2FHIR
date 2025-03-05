@@ -66,7 +66,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                         compound_results[compound_name].append(record)
 
             key_info = ["CHEMBL_ID", "STANDARD_INCHI", "CANONICAL_SMILES", "COMPOUND_NAME"]
-            substance_definations = []
+            substance_definitions = []
             substances = []
             medications = []
             medication_administrations = []
@@ -77,7 +77,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     if sdr:
                         sd = treatment_transformer.create_substance_definition(compound_name=compound_name, representations=sdr)
                         if sd:
-                            substance_definations.append(sd)
+                            substance_definitions.append(sd)
                             substance = treatment_transformer.create_substance(compound_name=compound_name, substance_definition=sd)
                             if substance:
                                 substances.append(substance)
@@ -88,14 +88,20 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                 if medication:
                                     medications.append(medication)
 
-            if save and substance_definations:
-                utils.deduplicate_and_save(substance_definations, "SubstanceDefinition.ndjson", meta_path, save)
+            if save and substance_definitions:
+                substance_definitions = utils.load_list_entities(substance_definitions)
+                cleaned_substance_definitions = utils.clean_resources(substance_definitions)
+                utils.deduplicate_and_save(cleaned_substance_definitions, "SubstanceDefinition.ndjson", meta_path, save)
 
             if save and substances:
-                utils.deduplicate_and_save(substances, "Substance.ndjson", meta_path, save)
+                substances = utils.load_list_entities(substances)
+                cleaned_substances = utils.clean_resources(substances)
+                utils.deduplicate_and_save(cleaned_substances, "Substance.ndjson", meta_path, save)
 
             if save and medications:
-                utils.deduplicate_and_save(medications, "Medication.ndjson", meta_path, save)
+                medications = utils.load_list_entities(medications)
+                cleaned_medications = utils.clean_resources(medications)
+                utils.deduplicate_and_save(cleaned_medications, "Medication.ndjson", meta_path, save)
 
             for treatment in treatments:
                 _subject_treatment = (
@@ -122,7 +128,9 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                             medication_administrations.append(med_admin)
 
             if save and medication_administrations:
-                utils.deduplicate_and_save(medication_administrations, "MedicationAdministration.ndjson", meta_path, save)
+                medication_administrations = utils.load_list_entities(medication_administrations)
+                cleaned_medication_administrations = utils.clean_resources(medication_administrations)
+                utils.deduplicate_and_save(cleaned_medication_administrations, "MedicationAdministration.ndjson", meta_path, save)
 
             if verbose:
                 print("**** treatment:")
@@ -170,7 +178,8 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
                 if mutation_observations:
                     fhir_mutation_obs = [orjson.loads(mo.json()) for mo in mutation_observations if mo]
-                    utils.create_or_extend(new_items=fhir_mutation_obs, folder_path='data/META',
+                    cleaned_fhir_mutation_obs = utils.clean_resources(fhir_mutation_obs)
+                    utils.create_or_extend(new_items=cleaned_fhir_mutation_obs, folder_path='data/META',
                                            resource_type='Observation', update_existing=False)
 
                 # release memory after each batch
@@ -235,9 +244,12 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                             observations.append(_specimen_obs)
 
             if save and fhir_specimens:
-                utils.deduplicate_and_save(fhir_specimens, "Specimen.ndjson", meta_path, save)
+                fhir_specimens = utils.load_list_entities(fhir_specimens)
+                cleaned_fhir_specimens = utils.clean_resources(fhir_specimens)
+                utils.deduplicate_and_save(cleaned_fhir_specimens, "Specimen.ndjson", meta_path, save)
                 if specimen_bds:
-                    utils.deduplicate_and_save(specimen_bds, "BodyStructure.ndjson", meta_path, save)
+                    cleaned_specimen_bds = utils.clean_resources(specimen_bds)
+                    utils.deduplicate_and_save(cleaned_specimen_bds, "BodyStructure.ndjson", meta_path, save)
 
             # Patient and Observation -----------------------------------
             subjects = session.query(CDASubject).all()
@@ -265,7 +277,9 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
             patients = patient_transformer.transform_human_subjects(subjects)
             if save and patients:
-                utils.deduplicate_and_save(patients, "Patient.ndjson", meta_path, save)
+                patients = utils.load_list_entities(patients)
+                cleaned_patients = utils.clean_resources(patients)
+                utils.deduplicate_and_save(cleaned_patients, "Patient.ndjson", meta_path, save)
 
             for subject in subjects:
                 patient_identifiers = patient_transformer.patient_identifier(subject)
@@ -451,15 +465,20 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                             research_studies.append(research_study)
 
             if save and research_studies:
-                utils.deduplicate_and_save(research_studies, "ResearchStudy.ndjson", meta_path, save)
+                research_studies = utils.load_list_entities(research_studies)
+                cleaned_research_studies = utils.clean_resources(research_studies)
+                utils.deduplicate_and_save(cleaned_research_studies, "ResearchStudy.ndjson", meta_path, save)
 
             if save and research_subjects:
-                utils.deduplicate_and_save(research_subjects, "ResearchSubject.ndjson", meta_path, save)
+                research_subjects = utils.load_list_entities(research_subjects)
+                cleaned_research_subjects = utils.clean_resources(research_subjects)
+                utils.deduplicate_and_save(cleaned_research_subjects, "ResearchSubject.ndjson", meta_path, save)
 
             if save and observations:
                 obs_dedup = {_obs.id: _obs for _obs in observations if _obs}.values()
                 fhir_observation = [orjson.loads(_observation.json()) for _observation in obs_dedup]
-                utils.create_or_extend(new_items=fhir_observation, folder_path='data/META', resource_type='Observation', update_existing=False)
+                cleaned_fhir_observation = utils.clean_resources(fhir_observation)
+                utils.create_or_extend(new_items=cleaned_fhir_observation, folder_path='data/META', resource_type='Observation', update_existing=False)
 
             # expire session to release memory
             session.expire_all()
@@ -532,12 +551,15 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                 condition_observations.append(obs_method_of_diagnosis)
 
             if save and conditions:
-                utils.deduplicate_and_save(conditions, "Condition.ndjson", meta_path, save)
+                conditions = utils.load_list_entities(conditions)
+                cleaned_conditions = utils.clean_resources(conditions)
+                utils.deduplicate_and_save(cleaned_conditions, "Condition.ndjson", meta_path, save)
 
             if save and condition_observations:
                 condition_observations_dedup = {_obs.id: _obs for _obs in condition_observations if _obs}.values()
                 fhir_condition_observation = [orjson.loads(_observation.json()) for _observation in condition_observations_dedup]
-                utils.create_or_extend(new_items=fhir_condition_observation, folder_path='data/META',
+                cleaned_condition_observations = utils.clean_resources(fhir_condition_observation)
+                utils.create_or_extend(new_items=cleaned_condition_observations, folder_path='data/META',
                                        resource_type='Observation', update_existing=False)
 
             # expire session to release memory
@@ -649,13 +671,15 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     if save and all_files:
                         document_references = {_doc_ref.id: _doc_ref for _doc_ref in all_files if _doc_ref}.values()
                         fhir_document_references = [orjson.loads(doc_ref.json()) for doc_ref in document_references]
-                        utils.create_or_extend(new_items=fhir_document_references, folder_path='data/META',
+                        cleaned_fhir_document_references = utils.clean_resources(fhir_document_references)
+                        utils.create_or_extend(new_items=cleaned_fhir_document_references, folder_path='data/META',
                                                resource_type='DocumentReference', update_existing=False)
 
                     if save and all_groups:
                         groups = {group.id: group for group in all_groups if group.id}.values()
                         fhir_groups = [orjson.loads(group.json()) for group in groups]
-                        utils.create_or_extend(new_items=fhir_groups, folder_path='data/META', resource_type='Group',
+                        cleaned_fhir_groups = utils.clean_resources(fhir_groups)
+                        utils.create_or_extend(new_items=cleaned_fhir_groups, folder_path='data/META', resource_type='Group',
                                                update_existing=False)
                     # expire session for this batch to release memory
                     session.expire_all()
