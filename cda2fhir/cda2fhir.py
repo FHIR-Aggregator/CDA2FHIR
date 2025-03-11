@@ -1,3 +1,4 @@
+import logging
 from cda2fhir import utils
 import orjson
 from pathlib import Path
@@ -10,7 +11,7 @@ from fhir.resources.group import Group
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDADiagnosis, CDATreatment, \
-    CDASubjectAlias, CDASubjectProject, CDAResearchSubjectDiagnosis, CDASpecimen, ProjectdbGap, GDCProgramdbGap, \
+    CDASubjectProject, CDAResearchSubjectDiagnosis, CDASpecimen, ProjectdbGap, GDCProgramdbGap, \
     CDASubjectIdentifier, CDAProjectRelation, CDAFile, CDAFileSubject, CDAFileSpecimen, CDAResearchSubjectTreatment, \
     CDAMutation, CDASubjectMutation
 from cda2fhir.transformer import PatientTransformer, ResearchStudyTransformer, ResearchSubjectTransformer, \
@@ -18,10 +19,30 @@ from cda2fhir.transformer import PatientTransformer, ResearchStudyTransformer, R
     MutationTransformer
 from sqlalchemy import select, func, or_,  and_
 from sqlalchemy.orm import aliased
+from sqlalchemy.orm import joinedload
 from sqlalchemy.orm import contains_eager
 
 gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDERS', 'FM', 'HCMI', 'MMRF', 'NCICCR',
                    'OHSU', 'ORGANOID', 'REBC', 'TARGET', 'TCGA', 'TRIO', 'VAREPOP', 'WCDT']
+
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+
+file_handler = logging.FileHandler("cda2fhir.log", mode="w")
+file_handler.setLevel(logging.DEBUG)
+
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+file_handler.setFormatter(formatter)
+stream_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
+
+logger.debug("logging is configured....")
 
 
 def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files, transform_treatment, transform_mutation, n_files, save=True, verbose=False):
@@ -228,6 +249,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
                 if _cda_subject:
                     # if subject and specimen derived from id exists in relative tables, then create the specimen
+                    specimen_project_name =  specimen.associated_project
                     _specimen_patient = patient_transformer.transform_human_subjects([_cda_subject])
                     fhir_specimen = specimen_transformer.fhir_specimen(specimen, _specimen_patient[0])
 
@@ -257,10 +279,6 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 for subject in subjects:
                     print(f"id: {subject.id}, species: {subject.species}, sex: {subject.sex}")
 
-                # projects = session.query(CDASubjectProject).filter_by(subject_id=subject.id).all()
-                # for project in projects:
-                #    print(f"@@@@@ Subject's associated  projects: {project.associated_project}")
-
             cda_research_subjects = session.query(CDAResearchSubject).all()
             if verbose:
                 print("==== research subjects:")
@@ -268,14 +286,9 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     print(
                         f"id: {cda_research_subject.id}, project: {cda_research_subject.member_of_research_project}, condition: {cda_research_subject.primary_diagnosis_condition}")
 
-            subject_researchsubjects = session.query(CDASubjectResearchSubject).all()
-            if verbose:
-                print("==== RELATIONS:")
-                for subject_researchsubject in subject_researchsubjects:
-                    print(
-                        f"researchsubject_id: {subject_researchsubject.researchsubject_id}, subject_id: {subject_researchsubject.subject_id}")
-
             patients = patient_transformer.transform_human_subjects(subjects)
+            logger.debug(f"For subjects:{subjects} \nFound {len(patients)} patient records.")
+
             if save and patients:
                 patients = utils.load_list_entities(patients)
                 cleaned_patients = utils.clean_resources(patients)
@@ -312,157 +325,222 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     observations.append(obs_days_to_birth)
 
             # ResearchStudy and ResearchSubject -----------------------------------
-            subject_aliases = session.query(CDASubjectAlias).all()
-            if verbose:
-                print("==== Subject Alias RELATIONS:")
-                for subject_alias in subject_aliases:
-                    print(
-                        f"subject_id: {subject_alias.subject_id}, subject_alias: {subject_alias.subject_alias}")
+            def get_research_subjects_for_subject(subject, fallback_mapping):
+                """
+                Return the list of research subjects for a subject.
+                Use the eager-loaded relationship if present; otherwise fall back
+                to the cached result from a batch query keyed by project code.
+                """
+                rs_list = [assoc.researchsubject for assoc in subject.researchsubject_subjects]
+                if not rs_list and '.' in subject.id:
+                    project_code = subject.id.split('.')[0]
+                    rs_list = fallback_mapping.get(project_code, [])
+                return rs_list
 
-            subject_projects = session.query(CDASubjectProject).all()
-            # print(f"found {len(subject_projects)} subject projects")
-            # subjects_with_projects = session.query(CDASubject).join(CDASubjectProject).all()
+            def append_identifiers_to_study(session, study):
+                """
+                Append identifiers from GDCProgramdbGap and ProjectdbGap to the study.
+                """
+                try:
+                    gdc_dbgap = session.query(GDCProgramdbGap).filter(
+                        GDCProgramdbGap.GDC_program_name.contains(study.name)
+                    ).one_or_none()
+                    if gdc_dbgap:
+                        study.identifier.append(
+                            Identifier(
+                                system="https://www.ncbi.nlm.nih.gov/dbgap_accession_number",
+                                value=gdc_dbgap[0],
+                                use="secondary"
+                            )
+                        )
+                    dbGap = session.query(ProjectdbGap).filter_by(
+                        GDC_project_id=study.name
+                    ).first()
+                    if dbGap:
+                        study.identifier.append(
+                            Identifier(
+                                system="https://www.ncbi.nlm.nih.gov/dbgap_accession_number",
+                                value=dbGap.dbgap_study_accession,
+                                use="secondary"
+                            )
+                        )
+                    return study
+                except Exception:
+                    logger.exception("Error retrieving identifiers for study %s", study.name)
+                    raise
 
-            research_studies = []
-            research_subjects = []
-            for project in subject_projects:
-                if project.associated_project:
-                    query_research_subjects = (
-                        session.query(CDAResearchSubject)
-                        .join(CDASubjectResearchSubject)
-                        .filter(CDASubjectResearchSubject.subject_id == project.subject_id)
+            def compute_part_of_references(session, subject, proj_relation_map):
+                """
+                Compute the partOf references for a subject.
+
+                Uses a preloaded proj_relation_map that maps project names to lists of
+                CDAProjectRelation objects.
+                """
+                part_refs = []
+                try:
+                    parts = subject.id.split(".")
+                    if len(parts) < 2:
+                        raise ValueError(f"Unexpected subject id format: {subject.id}")
+                    subject_id_value = parts[1]
+
+                    identifier_results = session.execute(
+                        select(CDASubjectIdentifier).filter_by(
+                            subject_alias=subject.integer_id_alias,
+                            value=subject_id_value
+                        )
+                    ).all()
+                    for (identifier_obj,) in identifier_results:
+                        prog_study = research_study_transformer.program_research_study(name=identifier_obj.system)
+                        if prog_study:
+                            ref = Reference(reference=f"ResearchStudy/{prog_study.id}")
+                            if ref not in part_refs:
+                                part_refs.append(ref)
+
+                    proj_assoc = session.query(CDASubjectProject).filter(
+                        CDASubjectProject.subject_alias == subject.integer_id_alias
+                    ).first()
+                    if proj_assoc:
+                        project_name = proj_assoc.associated_project
+                        rels = proj_relation_map.get(project_name, [])
+                        for rel in rels:
+                            for attr, default in [("project_gdc", "GDC"), ("project_pdc", "PDC"),
+                                                  ("project_idc", "IDC"), ("project_cds", "CDS"),
+                                                  ("project_icdc", "ICDC")]:
+                                if getattr(rel, attr) == project_name:
+                                    prog = research_study_transformer.program_research_study(name=default)
+                                    if prog:
+                                        ref = Reference(reference=f"ResearchStudy/{prog.id}")
+                                        if ref not in part_refs:
+                                            part_refs.append(ref)
+                            for field in ("program", "sub_program"):
+                                val = getattr(rel, field)
+                                if val:
+                                    prog = research_study_transformer.program_research_study(name=val)
+                                    if prog:
+                                        ref = Reference(reference=f"ResearchStudy/{prog.id}")
+                                        if ref not in part_refs:
+                                            part_refs.append(ref)
+                    return part_refs
+                except Exception:
+                    logger.exception("Error retrieving partOf references for subject %s", subject.id)
+                    raise
+
+            def process_projects(session):
+                """
+                Process projects to create one ResearchStudy per project and a set of ResearchSubject
+                resources for each subject linked to that project.
+
+                Uses eager loading and batch queries to reduce the number of database round trips.
+
+                Returns:
+                    research_studies, research_subjects: lists of FHIR ResearchStudy and ResearchSubject objects.
+                """
+                research_studies = []
+                research_subjects = []
+
+                unique_project_objs = (
+                    session.query(CDASubjectProject)
+                    .filter(CDASubjectProject.associated_project.isnot(None))
+                    .group_by(CDASubjectProject.associated_project)
+                    .all()
+                )
+                logger.info("Unique project objects: %s", unique_project_objs)
+
+                project_names = [proj.associated_project for proj in unique_project_objs]
+
+                project_relations = session.query(CDAProjectRelation).filter(
+                    or_(
+                        CDAProjectRelation.project_gdc.in_(project_names),
+                        CDAProjectRelation.project_pdc.in_(project_names),
+                        CDAProjectRelation.project_idc.in_(project_names),
+                        CDAProjectRelation.project_cds.in_(project_names),
+                        CDAProjectRelation.project_icdc.in_(project_names)
+                    )
+                ).all()
+                proj_relation_map = {}
+                for rel in project_relations:
+                    for attr in ("project_gdc", "project_pdc", "project_idc", "project_cds", "project_icdc"):
+                        proj = getattr(rel, attr)
+                        if proj in project_names:
+                            proj_relation_map.setdefault(proj, []).append(rel)
+
+                fallback_mapping = {}
+
+                def get_fallback_research_subjects(project_code):
+                    if project_code not in fallback_mapping:
+                        fallback_mapping[project_code] = session.query(CDAResearchSubject).filter(
+                            CDAResearchSubject.member_of_research_project == project_code
+                        ).all()
+                    return fallback_mapping[project_code]
+
+                for project_obj in unique_project_objs:
+                    project_name = project_obj.associated_project
+                    subjects = (
+                        session.query(CDASubject)
+                        .options(joinedload(CDASubject.researchsubject_subjects))
+                        .join(CDASubjectProject, CDASubject.integer_id_alias == CDASubjectProject.subject_alias)
+                        .filter(CDASubjectProject.associated_project == project_name)
                         .all()
                     )
-                    # fhir research subject
-                    _subject = (
-                        session.query(CDASubject)
-                        .filter(CDASubject.id == project.subject_id)
-                        .all()  # there is only one
-                    )
-                    _patient = patient_transformer.transform_human_subjects(_subject)
+                    logger.info("Project '%s': %d subjects found", project_name, len(subjects))
 
-                    for cda_rs_subject in query_research_subjects:
-                        research_study = research_study_transformer.research_study(project, cda_rs_subject)
+                    project_rs = []
+                    for subject in subjects:
+                        rs_list = [assoc.researchsubject for assoc in subject.researchsubject_subjects]
+                        if not rs_list and '.' in subject.id:
+                            project_code = subject.id.split('.')[0]
+                            rs_list = get_fallback_research_subjects(project_code)
+                        project_rs.extend(rs_list)
 
-                        # gdc_dbgap = session.execute(session.query(GDCProgramdbGap).filter(GDCProgramdbGap.GDC_program_name.in_(gdc_dbgap_names))).all()
-                        gdc_dbgap = session.execute(session.query(GDCProgramdbGap).where(
-                            GDCProgramdbGap.GDC_program_name.contains(research_study.name))).one_or_none()
+                    if not project_rs:
+                        logger.warning("No research subjects found for any subject in project '%s'", project_name)
+                        continue
 
-                        if gdc_dbgap:
-                            # parent dbGap ID for GDC projects ex. TCGA dgGap id for all projetcs including TCGA substring (ex. TCGA-BRCA)
-                            research_study.identifier.append(
-                                Identifier(**{"system": "https://www.ncbi.nlm.nih.gov/dbgap_accession_number", "value": gdc_dbgap[0], "use": "secondary"}))
+                    rep_rs = project_rs[0]
+                    try:
+                        study = research_study_transformer.research_study(project_obj, rep_rs)
+                        study = append_identifiers_to_study(session, study)
+                        logger.info("Created research study for project '%s': %s", project_name, study)
+                    except Exception:
+                        logger.exception("Error creating research study for project '%s'", project_name)
+                        continue
 
-                        # query and fetch projet's dbgap id
-                        dbGap_study_accession = session.execute(
-                            session.query(ProjectdbGap)
-                            .filter_by(GDC_project_id=research_study.name)
-                        ).first()
+                    for subject in subjects:
+                        try:
+                            patient_data = patient_transformer.subject_to_patient(subject)
+                            logger.info("Patient data for subject %s obtained", subject.id)
+                        except Exception:
+                            logger.exception("Error transforming patient data for subject %s", subject.id)
+                            continue
 
-                        if dbGap_study_accession:
-                            dbGap_identifier = Identifier(**{'system': "https://www.ncbi.nlm.nih.gov/dbgap_accession_number",
-                                                             'value': dbGap_study_accession[0].dbgap_study_accession,
-                                                             "use": "secondary"})
-                            research_study.identifier.append(dbGap_identifier)
+                        rs_list = get_research_subjects_for_subject(subject, fallback_mapping)
+                        if not rs_list:
+                            logger.warning("No research subjects found for subject %s in project %s", subject.id,
+                                           project_name)
+                            continue
 
-                        if research_study:
-                            if _patient and research_study:
-                                _research_subject = research_subject_transformer.research_subject(cda_rs_subject,
-                                                                                                  _patient[0],
-                                                                                                  research_study)
-                                research_subjects.append(_research_subject)
+                        for rs in rs_list:
+                            try:
+                                rsub = research_subject_transformer.research_subject(rs, patient_data, study)
+                                research_subjects.append(rsub)
+                                logger.info("Created research subject: %s", rsub)
+                            except Exception:
+                                logger.exception("Error creating research subject for subject %s", subject.id)
+                                continue
 
-                                # check and fetch program for project relation
-                                query_subject_alias = (
-                                    session.query(CDASubjectAlias)
-                                    .join(CDASubject)
-                                    .filter(CDASubject.id == _subject[0].id)
-                                    .all()  # there is only one
-                                )
+                        try:
+                            part_refs = compute_part_of_references(session, subject, proj_relation_map)
+                            if part_refs:
+                                study.partOf = (study.partOf or []) + part_refs
+                        except Exception:
+                            logger.exception("Error computing partOf references for subject %s and study %s",
+                                             subject.id, study.id)
 
-                                if "BEATAML" in _subject[0].id:
-                                    subject_id_value = _subject[0].id.replace("BEATAML1.0.", "")
-                                else:
-                                    subject_id_value = _subject[0].id.split(".")[1]
+                    research_studies.append(study)
 
-                                _cda_subject_identifiers = (session.execute(
-                                    select(CDASubjectIdentifier)
-                                    .filter_by(
-                                        subject_alias=query_subject_alias[0].subject_alias,
-                                        value=subject_id_value))
-                                                            .all())
-                                part_of_study = []
-                                for _cda_subject_identifier in _cda_subject_identifiers:
-                                    _program_research_study = research_study_transformer.program_research_study(
-                                        name=_cda_subject_identifier[0].system)
-                                    if _program_research_study:
-                                        research_studies.append(_program_research_study)
-                                        # research_study.partOf =
-                                        part_of_study.append(
-                                            Reference(**{"reference": f"ResearchStudy/{_program_research_study.id}"}))
+                return research_studies, research_subjects
 
-                                # ResearchStudy relations
-                                # CRDC <- GDC, IDC, PDC, ICDC, CDS, HTAN, CMPC
-                                project_name = project.associated_project
-                                associated_project_programs = session.query(CDAProjectRelation).filter(
-                                    or_(
-                                        CDAProjectRelation.project_gdc == project_name,
-                                        CDAProjectRelation.project_pdc == project_name,
-                                        CDAProjectRelation.project_idc == project_name,
-                                        CDAProjectRelation.project_cds == project_name,
-                                        CDAProjectRelation.project_icdc == project_name
-                                    )
-                                ).all()
-
-                                for _p in associated_project_programs:
-                                    print("===========: ", _p, "\n")
-                                    _p_name = None
-                                    if _p.project_gdc == project_name:
-                                        _p_name = 'GDC'
-                                    elif _p.project_pdc == project_name:
-                                        _p_name = 'PDC'
-                                    elif _p.project_idc == project_name:
-                                        _p_name = 'IDC'
-                                    elif _p.project_cds == project_name:
-                                        _p_name = 'CDS'
-                                    elif _p.project_icdc == project_name:
-                                        _p_name = 'ICDC'
-
-                                    # print("Program:", _p.program, "Sub-Program:", _p.sub_program, "GDC:", _p.project_gdc,
-                                    #       "PDC:", _p.project_pdc,
-                                    #       "IDC:", _p.project_idc, "CDS:", _p.project_cds, "ICDC:", _p.project_icdc,
-                                    #       "program_project_match:", _p_name)
-
-                                    if _p.program:
-                                        parent_program = research_study_transformer.program_research_study(
-                                            name=_p.program)
-                                        part_of_study = [p for p in part_of_study if
-                                                         p.reference not in f"ResearchStudy/{parent_program.id}"]
-                                        part_of_study.append(
-                                            Reference(**{"reference": f"ResearchStudy/{parent_program.id}"}))
-                                        research_studies.append(parent_program)
-
-                                    if _p_name:
-                                        main_program = research_study_transformer.program_research_study(
-                                            name=_p_name)
-                                        part_of_study = [p for p in part_of_study if
-                                                         p.reference not in f"ResearchStudy/{main_program.id}"]
-                                        part_of_study.append(Reference(**{"reference": f"ResearchStudy/{main_program.id}"}))
-                                        research_studies.append(main_program)
-
-                                    if _p.sub_program:
-                                        parent_sub_program = research_study_transformer.program_research_study(
-                                            name=_p.sub_program)
-                                        part_of_study = [p for p in part_of_study if
-                                                         p.reference not in f"ResearchStudy/{parent_sub_program.id}"]
-                                        part_of_study.append(
-                                            Reference(**{"reference": f"ResearchStudy/{parent_sub_program.id}"}))
-                                        research_studies.append(parent_sub_program)
-
-                                if part_of_study:
-                                    research_study.partOf = part_of_study
-
-                            research_studies.append(research_study)
+            research_studies, research_subjects = process_projects(session)
 
             if save and research_studies:
                 research_studies = utils.load_list_entities(research_studies)
@@ -480,7 +558,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 cleaned_fhir_observation = utils.clean_resources(fhir_observation)
                 utils.create_or_extend(new_items=cleaned_fhir_observation, folder_path='data/META', resource_type='Observation', update_existing=False)
 
-            # expire session to release memory
+            # Release session memory
             session.expire_all()
 
         # Condition and Observation -----------------------------------

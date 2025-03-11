@@ -41,14 +41,15 @@ class CDASubject(Base):
     vital_status: Mapped[Optional[str]] = mapped_column(String)
     days_to_death: Mapped[Optional[int]] = mapped_column(Integer)
     cause_of_death: Mapped[Optional[str]] = mapped_column(String)
-    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer)
+    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer, unique=True)
     researchsubject_subjects: Mapped[List["CDASubjectResearchSubject"]] = relationship(
         back_populates="subject"
     )
-    subject_alias_relation: Mapped[List["CDASubjectAlias"]] = relationship(
-        back_populates="subject_alias_relations"
-    )
     subject_project_relation: Mapped[List["CDASubjectProject"]] = relationship(
+        back_populates="subject"
+    )
+    subject_identifier: Mapped[List["CDASubjectIdentifier"]] = relationship(
+        "CDASubjectIdentifier",
         back_populates="subject"
     )
     subject_file_relation: Mapped[List["CDAFileSubject"]] = relationship(
@@ -59,14 +60,21 @@ class CDASubject(Base):
         back_populates="subject"
     )
 
-
     @property
     def alias_id(self):
-        """Fetch CDA subject's alias id from subject_alias_relations table - (one to one)"""
-        if self.subject_alias_relation and len(self.subject_alias_relation) > 0:
-            return self.subject_alias_relation.__getitem__(0).subject_alias
-        else:
-            return None
+        return self.integer_id_alias
+
+
+
+class CDASubjectIdentifier(Base):
+    __tablename__ = 'subject_identifier'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subject_alias: Mapped[int] = mapped_column(Integer, ForeignKey('subject.integer_id_alias'), nullable=False)
+    system: Mapped[str] = mapped_column(String, nullable=False)
+    field_name: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[str] = mapped_column(String, nullable=False)
+    subject: Mapped["CDASubject"] = relationship("CDASubject", back_populates="subject_identifier")
+
 
 
 class CDAResearchSubject(Base):
@@ -76,7 +84,7 @@ class CDAResearchSubject(Base):
     member_of_research_project: Mapped[Optional[str]] = mapped_column(String)
     primary_diagnosis_condition: Mapped[Optional[str]] = mapped_column(String)
     primary_diagnosis_site: Mapped[Optional[str]] = mapped_column(String)
-    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer)
+    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer, unique=True)
     subject_researchsubjects: Mapped[List["CDASubjectResearchSubject"]] = relationship(
         back_populates="researchsubject"
     )
@@ -90,12 +98,11 @@ class CDAResearchSubject(Base):
         back_populates="researchsubject"
     )
 
-
 class CDASubjectResearchSubject(Base):
     __tablename__ = 'subject_researchsubject'
     query: QueryPropertyDescriptor = Session.query_property()
-    subject_id: Mapped[str] = mapped_column(ForeignKey("subject.id"), primary_key=True)
-    researchsubject_id: Mapped[str] = mapped_column(ForeignKey("researchsubject.id"), primary_key=True)
+    subject_alias: Mapped[int] = mapped_column(ForeignKey("subject.integer_id_alias"), primary_key=True)
+    researchsubject_alias: Mapped[int] = mapped_column(ForeignKey("researchsubject.integer_id_alias"), primary_key=True)
     subject: Mapped["CDASubject"] = relationship(
         back_populates="researchsubject_subjects"
     )
@@ -103,25 +110,15 @@ class CDASubjectResearchSubject(Base):
         back_populates="subject_researchsubjects"
     )
 
-
-class CDASubjectAlias(Base):
-    __tablename__ = 'subject_alias_table'
-    query: QueryPropertyDescriptor = Session.query_property()
-    subject_id: Mapped[str] = mapped_column(ForeignKey("subject.id"), primary_key=True)
-    subject_alias: Mapped[int] = mapped_column(Integer, primary_key=True)
-    subject_alias_relations: Mapped["CDASubject"] = relationship(
-        back_populates="subject_alias_relation"
-    )
-
-
 class CDASubjectProject(Base):
     __tablename__ = 'subject_project'
     query: QueryPropertyDescriptor = Session.query_property()
-    subject_id: Mapped[str] = mapped_column(ForeignKey("subject.id"), primary_key=True)
+    subject_alias: Mapped[int] = mapped_column(ForeignKey("subject.integer_id_alias"), primary_key=True)
     associated_project: Mapped[str] = mapped_column(String, primary_key=True)
     subject: Mapped["CDASubject"] = relationship(
         back_populates="subject_project_relation"
     )
+
 
 
 class CDADiagnosis(Base):
@@ -131,7 +128,14 @@ class CDADiagnosis(Base):
     primary_diagnosis: Mapped[Optional[str]] = mapped_column(String)
     age_at_diagnosis: Mapped[Optional[int]] = mapped_column(Integer)
     morphology: Mapped[Optional[str]] = mapped_column(String)
-    stage: Mapped[Optional[str]] = mapped_column(String)
+    pathologic_stage: Mapped[Optional[str]] = mapped_column(String)
+    pathologic_stage_m: Mapped[Optional[str]] = mapped_column(String)
+    pathologic_stage_n: Mapped[Optional[str]] = mapped_column(String)
+    pathologic_stage_t: Mapped[Optional[str]] = mapped_column(String)
+    clinical_stage: Mapped[Optional[str]] = mapped_column(String)
+    clinical_stage_m: Mapped[Optional[str]] = mapped_column(String)
+    clinical_stage_n: Mapped[Optional[str]] = mapped_column(String)
+    clinical_stage_t: Mapped[Optional[str]] = mapped_column(String)
     grade: Mapped[Optional[str]] = mapped_column(String)
     method_of_diagnosis: Mapped[Optional[str]] = mapped_column(String)
     integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer)
@@ -237,14 +241,6 @@ class GDCProgramdbGap(Base):
 #    query: QueryPropertyDescriptor = Session.query_property()
 #    # TODO: make one table via all xlsx sheets
 
-class CDASubjectIdentifier(Base):
-    __tablename__ = 'cda_subject_identifier' # CDA provenance info relation table.
-    query: QueryPropertyDescriptor = Session.query_property()
-    subject_alias:  Mapped[Optional[int]] = mapped_column(Integer, primary_key=True)
-    value: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
-    system: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
-    field_name: Mapped[Optional[str]] = mapped_column(String, primary_key=True)
-
 
 class CDAProjectRelation(Base):
     __tablename__ = 'project_program_relation'
@@ -288,11 +284,12 @@ class CDAFile(Base):
     )
 
 
+
 class CDAFileSubject(Base):
     __tablename__ = 'file_subject'
     query: QueryPropertyDescriptor = Session.query_property()
-    file_id: Mapped[str] = mapped_column(ForeignKey("cda_file.id"), primary_key=True)
-    subject_id: Mapped[str] = mapped_column(ForeignKey("subject.id"), primary_key=True)
+    file_alias: Mapped[str] = mapped_column(ForeignKey("cda_file.integer_id_alias"), primary_key=True)
+    subject_alias: Mapped[str] = mapped_column(ForeignKey("subject.integer_id_alias"), primary_key=True)
     subject: Mapped["CDASubject"] = relationship(
         back_populates="subject_file_relation"
     )
@@ -301,11 +298,12 @@ class CDAFileSubject(Base):
     )
 
 
+
 class CDAFileSpecimen(Base):
     __tablename__ = 'file_specimen'
     query: QueryPropertyDescriptor = Session.query_property()
-    file_id: Mapped[str] = mapped_column(ForeignKey("cda_file.id"), primary_key=True)
-    specimen_id: Mapped[str] = mapped_column(ForeignKey("specimen.id"), primary_key=True)
+    file_alias: Mapped[str] = mapped_column(ForeignKey("cda_file.integer_id_alias"), primary_key=True)
+    specimen_alias: Mapped[str] = mapped_column(ForeignKey("specimen.integer_id_alias"), primary_key=True)
     specimen: Mapped["CDASpecimen"] = relationship(
         back_populates="file_specimen_relation"
     )

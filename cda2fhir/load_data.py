@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.engine.reflection import Inspector
 from cda2fhir.database import init_db, SessionLocal
 from cda2fhir.cdamodels import (CDASubject, CDASubjectResearchSubject, CDAResearchSubject, CDADiagnosis,
-                                CDAResearchSubjectDiagnosis, CDATreatment, CDAResearchSubjectTreatment, CDASubjectAlias,
+                                CDAResearchSubjectDiagnosis, CDATreatment, CDAResearchSubjectTreatment,
                                 CDASubjectProject,  CDASpecimen, CDASubjectIdentifier, CDAResearchSubjectSpecimen,
                                 ProjectdbGap, GDCProgramdbGap, CDAProjectRelation, CDAFile, CDAFileSpecimen, CDAFileSubject,
                                 CDAMutation, CDASubjectMutation)
@@ -20,8 +20,24 @@ def file_size(file_path):
     return os.path.getsize(file_path) / (1024 ** 3)  #size in GB
 
 
-def load_to_db(paths, table_class, session):
-    """load data from single file or list of files (JSON, CSV, Excel, TSV) paths into the database."""
+def load_to_db(paths, table_class, session, check_species=False):
+    """
+    Load data from a single file or list of files (JSON, CSV, Excel, TSV) into the database.
+
+    Parameters:
+        paths: A single file path or a list of file paths.
+        table_class: The SQLAlchemy model class to load data into.
+        session: The SQLAlchemy session.
+        check_species: If True, check for a 'species' field in JSON records.
+                         If the field exists, only load the record if its value is 'Human' or 'Homo sapiens'.
+                         If the field does not exist, assume the record is human.
+    """
+    import json, mimetypes
+    from sqlalchemy.exc import IntegrityError
+    import pandas as pd
+
+    human_species_nomenclature = {'Human', 'Homo sapiens'}
+
     if isinstance(paths, str):
         paths = [paths]
 
@@ -30,14 +46,15 @@ def load_to_db(paths, table_class, session):
         result = mimetypes.guess_type(path, strict=False)[0]
 
         if 'json' in result:
-            """load json records and filter by CDA tags for human species - note: converted original data to list of 
-               dicts vs. dict of dicts (for json lint passing)"""
             with open(path, encoding='utf-8') as f:
                 data = json.load(f)
-                filter_species = {'Human', 'Homo sapiens'}
                 for line in data:
-                    if 'species' in line.keys() and filter_species and line.get("species") not in filter_species:
-                        continue
+                    if check_species:
+                        if 'species' in line:
+                            if line.get("species") not in human_species_nomenclature:
+                                continue
+                        else:
+                            line["species"] = "Human"
                     try:
                         session.add(table_class(**line))
                     except IntegrityError:
@@ -50,6 +67,9 @@ def load_to_db(paths, table_class, session):
                 df = pd.read_csv(path)
             elif 'tab-separated-values' in result:
                 df = pd.read_csv(path, sep='\t')
+            else:
+                print(f"Unsupported file type for PATH: {path}")
+                continue
 
             for row in df.to_dict(orient='records'):
                 try:
@@ -58,7 +78,7 @@ def load_to_db(paths, table_class, session):
                     session.rollback()
                     print(f"Skipping duplicate entry in {table_class.__tablename__}: {row}")
 
-        session.flush() # flush changes to the database
+        session.flush()  # flush changes to the database
         session.commit()
 
 
@@ -165,7 +185,7 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
     clear_table(CDAResearchSubjectDiagnosis, session)
     clear_table(CDATreatment, session)
     clear_table(CDAResearchSubjectTreatment, session)
-    clear_table(CDASubjectAlias, session)
+    # clear_table(CDASubjectAlias, session)
     clear_table(CDASubjectProject, session)
     clear_table(CDASpecimen, session)
     clear_table(CDAResearchSubjectSpecimen, session)
@@ -175,20 +195,24 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
 
     try:
         # if not table_exists(engine, 'subject'): #TODO: add when relations and tables are defined
-        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'subject.json')),
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'subject.json')),
                    CDASubject, session)
 
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'subject_identifier.json')),
+                   CDASubjectIdentifier, session)
+
+
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'subject_associated_project.json')),
+                   CDASubjectProject, session)
+
         load_to_db(
-            str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'researchsubject.json')),
+            str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'researchsubject.json')),
             CDAResearchSubject, session)
 
         load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'subject_identifier.json')),
+            'cda2fhir').parent / 'data' / 'raw_022025' / 'subject_identifier.json')),
                    CDASubjectIdentifier, session)
 
-        load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_researchsubject.tsv')),
-                   CDASubjectResearchSubject, session)
         if transform_condition:
 
             load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'diagnosis.json')),
@@ -206,17 +230,10 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
             'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_treatment.tsv')),
                    CDAResearchSubjectTreatment, session)
 
-        load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'alias_files' / 'subject_integer_aliases.tsv')), CDASubjectAlias,
-                   session)
-
-        load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'subject_associated_project.tsv')),
-                   CDASubjectProject, session)
 
         if not transform_mutation and not transform_condition:
 
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'specimen.json')),
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'specimen.json')),
                        CDASpecimen, session)
 
         load_to_db(str(Path(importlib.resources.files(

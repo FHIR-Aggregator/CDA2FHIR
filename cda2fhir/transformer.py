@@ -34,14 +34,47 @@ from uuid import uuid3, uuid5, NAMESPACE_DNS
 
 
 CDA_SITE = 'cda.readthedocs.io'
-# global logging
-logging.basicConfig(filename='info.log', level=logging.INFO)
 
-# error logging
-error_handler = logging.FileHandler('error.log')
+MISSING_RELATIONS = ["MATCH-C1", "MATCH-P", "MATCH-Z1B",
+                     "Proteogenomic Translational Research Centers (PTRC)", "DCCPS", "cmb_aml", "cmb_lca",
+                     "CCDI", "cmb_mel", "cmb_mml", "cmb_crc", "cmb_gec", "ccdi_mci", "cmb_pca", "gtex",
+                     "CPTAC3 Discovery and Confirmatory"]
+
+logging.basicConfig(
+    filename='info.log',
+    level=logging.INFO,
+    filemode='w',
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.DEBUG)
+stream_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+stream_handler.setFormatter(stream_formatter)
+logger.addHandler(stream_handler)
+
+file_handler = logging.FileHandler("log_file.log", mode="w")
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(stream_formatter)
+logger.addHandler(file_handler)
+
+error_handler = logging.FileHandler('error.log', mode="w")
 error_handler.setLevel(logging.ERROR)
-logging.getLogger().addHandler(error_handler)
+error_handler.setFormatter(stream_formatter)
+logger.addHandler(error_handler)
 
+no_project_logger = logging.getLogger("no_project_associations")
+no_project_logger.setLevel(logging.INFO)
+no_project_handler = logging.FileHandler("no_project_associations.log", mode="w")
+no_project_handler.setLevel(logging.INFO)
+no_project_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+no_project_handler.setFormatter(no_project_formatter)
+no_project_logger.addHandler(no_project_handler)
+
+logger.debug("Logging is now configured.")
 
 class Transformer:
     def __init__(self, session: Session):
@@ -135,6 +168,70 @@ class Transformer:
         if research_study:
             return research_study
 
+    def get_part_of_study_extension(self, subject: CDASubject, extensions: list):
+        if subject.subject_project_relation:
+            project_id_system = f"https://{CDA_SITE}/associated_project"
+            project_value = subject.subject_project_relation[0].associated_project
+            project_id_identifier = Identifier(
+                **{'system': project_id_system, 'value': project_value, "use": "official"}
+            )
+            research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
+            if research_study_id:
+                part_of_study = {
+                    "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+                    "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
+                }
+                extensions.append(part_of_study)
+        else:
+            # try to extract the project name from the subject.id
+            if '.' in subject.id:
+                project_from_id = subject.id.split('.')[0]
+                project_id_system = f"https://{CDA_SITE}/associated_project"
+                project_id_identifier = Identifier(
+                    **{'system': project_id_system, 'value': project_from_id, "use": "official"}
+                )
+                research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
+                if research_study_id:
+                    part_of_study = {
+                        "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+                        "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
+                    }
+                    extensions.append(part_of_study)
+            else:
+                no_project_logger.info(f"Subject with id {subject.id} does not have any project associations.")
+
+    # def get_part_of_study_extension(self, subject: CDASubject, extensions: list):
+    #     if subject.subject_project_relation:
+    #         print("*******++++++ subject project relation: ",
+    #               type(subject.subject_project_relation),
+    #               subject.subject_project_relation[0].associated_project, "\n")
+    #
+    #         project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
+    #         project_id_identifier = Identifier(
+    #             **{'system': project_id_system, 'value': subject.subject_project_relation[0].associated_project,
+    #                "use": "official"})
+    #         research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
+    #
+    #         if research_study_id:
+    #             part_of_study = {
+    #                 "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+    #                 "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
+    #             }
+    #             extensions.append(part_of_study)
+    #     else:
+    #         no_project_logger.info(f"Subject with id {subject.id} does not have any project associations.")
+    #         for missing_project in MISSING_RELATIONS:
+    #             if missing_project in subject.id:
+    #                 project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
+    #                 project_id_identifier = Identifier(**{'system': project_id_system, 'value': missing_project, "use": "official"})
+    #                 research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
+    #                 if research_study_id:
+    #                     part_of_study = {
+    #                         "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+    #                         "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
+    #                     }
+    #                     extensions.append(part_of_study)
+
 
 class PatientTransformer(Transformer):
     def __init__(self, session: Session):
@@ -160,6 +257,40 @@ class PatientTransformer(Transformer):
         if usCoreEthnicity:
             extensions.append(usCoreEthnicity)
 
+        # part of study extension
+        # if subject.subject_project_relation:
+        #     print("*******++++++ subject project relation: ",
+        #           type(subject.subject_project_relation),
+        #           subject.subject_project_relation[0].associated_project, "\n")
+
+            project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
+            project_id_identifier = Identifier(
+                **{'system': project_id_system, 'value': subject.subject_project_relation[0].associated_project,
+                   "use": "official"})
+            research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
+
+            if research_study_id:
+                part_of_study = {
+                    "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+                    "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
+                }
+                extensions.append(part_of_study)
+        else:
+            no_project_logger.info(f"Subject with id {subject.id} does not have any project associations.")
+            for missing_project in MISSING_RELATIONS:
+                if missing_project in subject.id:
+                    project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
+                    project_id_identifier = Identifier(**{'system': project_id_system, 'value': missing_project, "use": "official"})
+                    research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
+                    if research_study_id:
+                        part_of_study = {
+                            "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+                            "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
+                        }
+                        extensions.append(part_of_study)
+
+        self.get_part_of_study_extension(subject, extensions=extensions)
+
         patient = Patient(**{
             "id": self.patient_mintid(patient_identifiers[0]),
             "identifier": patient_identifiers,
@@ -177,7 +308,7 @@ class PatientTransformer(Transformer):
         subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id), "use": "official"})
 
         subject_alias_system = "".join([f"https://{CDA_SITE}/", "subject_alias"])
-        subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.alias_id), "use": "secondary"})
+        subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.integer_id_alias), "use": "secondary"})
         return [subject_id_identifier, subject_alias_identifier]
 
     def patient_mintid(self, patient_identifier: Identifier) -> str:
@@ -677,6 +808,10 @@ class SpecimenTransformer(Transformer):
         fhir_specimen_identifier = self.specimen_identifier(cda_specimen)
         fhir_specimen_id = self.specimen_mintid(fhir_specimen_identifier[0])
 
+        project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
+        project_id_identifier = Identifier(**{'system': project_id_system, 'value': str(cda_specimen.associated_project), "use": "official"})
+        research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
+
         parent = None
         if cda_specimen.derived_from_specimen and cda_specimen.derived_from_specimen != "initial specimen":
             parent_specimen_id_system = "".join([f"https://{CDA_SITE}/", "specimen"])
@@ -721,6 +856,10 @@ class SpecimenTransformer(Transformer):
                     "reference": f"Patient/{patient.id}"
                 },
                 "collection": collection,
+                "extension": [{
+                    "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+                    "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
+                }]
             }
         )
 
@@ -1191,6 +1330,9 @@ class MedicationAdministrationTransformer(Transformer):
         medication_display = "Unknown" if medication is None else medication_name
         medication_reference = {"reference": f"Medication/{medication.id}"} if medication else None
 
+        extensions = []
+        self.get_part_of_study_extension(subject, extensions= extensions)
+
         med_admin = {
             "id": medication_admin_id,
             "identifier": [{
@@ -1209,7 +1351,8 @@ class MedicationAdministrationTransformer(Transformer):
                 "reference": medication_reference
             },
             "subject": {"reference": f"Patient/{fhir_patient_id}"},
-            "occurenceTiming": timing
+            "occurenceTiming": timing,
+            "extensions": extensions
         }
 
         return MedicationAdministration(**med_admin)
@@ -1258,6 +1401,9 @@ class MutationTransformer(Transformer):
             if component:
                 components.append(component)
 
+        extensions = []
+        self.get_part_of_study_extension(subject, extensions=extensions)
+
         obs = Observation(
             **{
                 "id": mutation_id,
@@ -1289,7 +1435,8 @@ class MutationTransformer(Transformer):
                 "focus": [{
                     "reference": f"Patient/{fhir_patient_id}" #TODO: add specimen
                 }],
-                "component": components
+                "component": components,
+                "extensions": extensions
             }
         )
         return obs
