@@ -371,10 +371,8 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
             def compute_part_of_references(session, subject, proj_relation_map):
                 """
-                Compute the partOf references for a subject.
-
-                Uses a preloaded proj_relation_map that maps project names to lists of
-                CDAProjectRelation objects.
+                Compute the partOf references for a subject using a preloaded proj_relation_map.
+                Returns a deduplicated list of FHIR Reference objects based on their 'reference' string.
                 """
                 part_refs = []
                 try:
@@ -393,8 +391,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                         prog_study = research_study_transformer.program_research_study(name=identifier_obj.system)
                         if prog_study:
                             ref = Reference(reference=f"ResearchStudy/{prog_study.id}")
-                            if ref not in part_refs:
-                                part_refs.append(ref)
+                            part_refs.append(ref)
 
                     proj_assoc = session.query(CDASubjectProject).filter(
                         CDASubjectProject.subject_alias == subject.integer_id_alias
@@ -410,17 +407,21 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                     prog = research_study_transformer.program_research_study(name=default)
                                     if prog:
                                         ref = Reference(reference=f"ResearchStudy/{prog.id}")
-                                        if ref not in part_refs:
-                                            part_refs.append(ref)
+                                        part_refs.append(ref)
                             for field in ("program", "sub_program"):
                                 val = getattr(rel, field)
                                 if val:
                                     prog = research_study_transformer.program_research_study(name=val)
                                     if prog:
                                         ref = Reference(reference=f"ResearchStudy/{prog.id}")
-                                        if ref not in part_refs:
-                                            part_refs.append(ref)
-                    return part_refs
+                                        part_refs.append(ref)
+
+                    unique_refs = {}
+                    for ref in part_refs:
+                        if ref.reference not in unique_refs:
+                            unique_refs[ref.reference] = ref
+                    return list(unique_refs.values())
+
                 except Exception:
                     logger.exception("Error retrieving partOf references for subject %s", subject.id)
                     raise
@@ -429,9 +430,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 """
                 Process projects to create one ResearchStudy per project and a set of ResearchSubject
                 resources for each subject linked to that project.
-
-                Uses eager loading and batch queries to reduce the number of database round trips.
-
+                Uses eager loading and batch queries to reduce database round trips.
                 Returns:
                     research_studies, research_subjects: lists of FHIR ResearchStudy and ResearchSubject objects.
                 """
@@ -531,7 +530,10 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                         try:
                             part_refs = compute_part_of_references(session, subject, proj_relation_map)
                             if part_refs:
-                                study.partOf = (study.partOf or []) + part_refs
+                                existing_refs = {ref.reference: ref for ref in study.partOf} if study.partOf else {}
+                                for ref in part_refs:
+                                    existing_refs.setdefault(ref.reference, ref)
+                                study.partOf = list(existing_refs.values())
                         except Exception:
                             logger.exception("Error computing partOf references for subject %s and study %s",
                                              subject.id, study.id)

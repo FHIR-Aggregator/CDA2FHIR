@@ -98,6 +98,7 @@ class CDAResearchSubject(Base):
         back_populates="researchsubject"
     )
 
+
 class CDASubjectResearchSubject(Base):
     __tablename__ = 'subject_researchsubject'
     query: QueryPropertyDescriptor = Session.query_property()
@@ -109,6 +110,7 @@ class CDASubjectResearchSubject(Base):
     researchsubject: Mapped["CDAResearchSubject"] = relationship(
         back_populates="subject_researchsubjects"
     )
+
 
 class CDASubjectProject(Base):
     __tablename__ = 'subject_project'
@@ -138,7 +140,7 @@ class CDADiagnosis(Base):
     clinical_stage_t: Mapped[Optional[str]] = mapped_column(String)
     grade: Mapped[Optional[str]] = mapped_column(String)
     method_of_diagnosis: Mapped[Optional[str]] = mapped_column(String)
-    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer)
+    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer, unique=True)
     researchsubject_diagnoses: Mapped[List["CDAResearchSubjectDiagnosis"]] = relationship(
         back_populates="diagnosis"
     )
@@ -147,8 +149,8 @@ class CDADiagnosis(Base):
 class CDAResearchSubjectDiagnosis(Base):
     __tablename__ = 'researchsubject_diagnosis'
     query: QueryPropertyDescriptor = Session.query_property()
-    researchsubject_id: Mapped[str] = mapped_column(ForeignKey('researchsubject.id'), primary_key=True)
-    diagnosis_id: Mapped[str] = mapped_column(ForeignKey('diagnosis.id'), primary_key=True)
+    researchsubject_alias: Mapped[str] = mapped_column(ForeignKey('researchsubject.integer_id_alias'), primary_key=True)
+    diagnosis_alias: Mapped[str] = mapped_column(ForeignKey('diagnosis.integer_id_alias'), primary_key=True)
     diagnosis: Mapped["CDADiagnosis"] = relationship(
         back_populates="researchsubject_diagnoses"
     )
@@ -170,7 +172,7 @@ class CDATreatment(Base):
     treatment_effect: Mapped[Optional[str]] = mapped_column(String)
     treatment_end_reason: Mapped[Optional[str]] = mapped_column(String)
     number_of_cycles: Mapped[Optional[int]] = mapped_column(Integer)
-    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer)
+    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer, unique=True)
     researchsubject_treatments: Mapped[List["CDAResearchSubjectTreatment"]] = relationship(
         back_populates="treatment"
     )
@@ -179,8 +181,8 @@ class CDATreatment(Base):
 class CDAResearchSubjectTreatment(Base):
     __tablename__ = 'researchsubject_treatment'
     query: QueryPropertyDescriptor = Session.query_property()
-    researchsubject_id: Mapped[str] = mapped_column(ForeignKey('researchsubject.id'), primary_key=True)
-    treatment_id: Mapped[str] = mapped_column(ForeignKey('treatment.id'), primary_key=True)
+    researchsubject_alias: Mapped[str] = mapped_column(ForeignKey('researchsubject.integer_id_alias'), primary_key=True)
+    treatment_alias: Mapped[str] = mapped_column(ForeignKey('treatment.integer_id_alias'), primary_key=True)
     researchsubject: Mapped["CDAResearchSubject"] = relationship(
         back_populates="treatment_researchsubjects"
     )
@@ -212,8 +214,8 @@ class CDASpecimen(Base):
 class CDAResearchSubjectSpecimen(Base):
     __tablename__ = 'researchsubject_specimen'
     query: QueryPropertyDescriptor = Session.query_property()
-    researchsubject_id: Mapped[str] = mapped_column(ForeignKey('researchsubject.id'), primary_key=True)
-    specimen_id: Mapped[str] = mapped_column(ForeignKey('specimen.id'), primary_key=True)
+    researchsubject_alias: Mapped[str] = mapped_column(ForeignKey('researchsubject.integer_id_alias'), primary_key=True)
+    specimen_alias: Mapped[str] = mapped_column(ForeignKey('specimen.integer_id_alias'), primary_key=True)
     specimen: Mapped["CDASpecimen"] = relationship(
         back_populates="researchsubject_specimens"
     )

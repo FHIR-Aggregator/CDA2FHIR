@@ -185,7 +185,6 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
     clear_table(CDAResearchSubjectDiagnosis, session)
     clear_table(CDATreatment, session)
     clear_table(CDAResearchSubjectTreatment, session)
-    # clear_table(CDASubjectAlias, session)
     clear_table(CDASubjectProject, session)
     clear_table(CDASpecimen, session)
     clear_table(CDAResearchSubjectSpecimen, session)
@@ -211,19 +210,18 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
                    CDAResearchSubject, session)
 
         if transform_condition:
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'diagnosis.json')),
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'diagnosis.json')),
                        CDADiagnosis, session)
 
         if transform_treatment:
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'treatment.json')),
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'treatment.json')),
                        CDATreatment, session)
 
-        load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_diagnosis.tsv')),
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'researchsubject_diagnosis.json')),
                    CDAResearchSubjectDiagnosis, session)
 
-        load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_treatment.tsv')),
+
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'researchsubject_treatment.json')),
                    CDAResearchSubjectTreatment, session)
 
 
@@ -232,8 +230,7 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
             load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'specimen.json')),
                        CDASpecimen, session)
 
-        load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'researchsubject_specimen.tsv')),
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'researchsubject_specimen.json')),
                    CDAResearchSubjectSpecimen, session)
 
         load_to_db(str(Path(importlib.resources.files(
@@ -252,7 +249,7 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
 
         if transform_mutation:
             # load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'/ 'CGCI-BLGSP_mutations.json')), CDAMutation, session)
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'mutation.json')), CDAMutation, session)
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'mutation.json')), CDAMutation, session)
 
             # mutation_folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'))
             # mutation_file_paths = glob.glob(os.path.join(mutation_folder_path, '*'))
@@ -260,12 +257,11 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
             #
             # load_to_db(mutation_file_paths, CDAMutation, session)
             #
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'subject_mutation.json')),
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'subject_mutation.json')),
                         CDASubjectMutation, session)
 
         if transform_files:
-
-            files_dir = Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted')
+            files_dir = Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'files_converted')
             file_paths = list(files_dir.glob('*'))  # glob all files in the directory
 
             if not file_paths:
@@ -273,7 +269,7 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
 
             load_file_relations(session)
 
-            file_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted'/ 'files_project_TCGA-KIRC_converted.json'))
+            file_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'files_converted'/ 'files_project_TCGA-KIRC_converted.json'))
             load_to_db(file_path, CDAFile, session)
 
             file_size_mb = os.path.getsize(file_path) / (1024 ** 2)
