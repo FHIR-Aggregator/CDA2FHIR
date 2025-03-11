@@ -198,27 +198,23 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
         load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'subject.json')),
                    CDASubject, session)
 
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'subject_researchsubject.json')),
+                   CDASubjectResearchSubject, session)
+
         load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'subject_identifier.json')),
                    CDASubjectIdentifier, session)
-
 
         load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'subject_associated_project.json')),
                    CDASubjectProject, session)
 
-        load_to_db(
-            str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'researchsubject.json')),
-            CDAResearchSubject, session)
-
-        load_to_db(str(Path(importlib.resources.files(
-            'cda2fhir').parent / 'data' / 'raw_022025' / 'subject_identifier.json')),
-                   CDASubjectIdentifier, session)
+        load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'researchsubject.json')),
+                   CDAResearchSubject, session)
 
         if transform_condition:
-
             load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'diagnosis.json')),
                        CDADiagnosis, session)
-        if transform_treatment:
 
+        if transform_treatment:
             load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'treatment.json')),
                        CDATreatment, session)
 
