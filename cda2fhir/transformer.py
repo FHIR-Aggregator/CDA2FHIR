@@ -28,10 +28,10 @@ from fhir.resources.quantity import Quantity
 from fhir.resources.timing import Timing, TimingRepeat
 from fhir.resources.range import Range
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 from cda2fhir.cdamodels import CDASubject, CDAResearchSubject, CDASubjectResearchSubject, CDASubjectProject, \
     CDADiagnosis, CDASpecimen, CDAFile, CDATreatment, CDAMutation
 from uuid import uuid3, uuid5, NAMESPACE_DNS
-
 
 CDA_SITE = 'cda.readthedocs.io'
 
@@ -168,69 +168,37 @@ class Transformer:
         if research_study:
             return research_study
 
+
     def get_part_of_study_extension(self, subject: CDASubject, extensions: list):
+        ext_url = "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study"
+
+        def get_extension_url(ext):
+            if isinstance(ext, dict):
+                return ext.get("url")
+            elif hasattr(ext, "url"):
+                return ext.url
+            return None
+
+        if any(get_extension_url(ext) == ext_url for ext in extensions):
+            return
+
+        project_value = None
         if subject.subject_project_relation:
-            project_id_system = f"https://{CDA_SITE}/associated_project"
             project_value = subject.subject_project_relation[0].associated_project
-            project_id_identifier = Identifier(
-                **{'system': project_id_system, 'value': project_value, "use": "official"}
-            )
+        elif '.' in subject.id:
+            project_value = subject.id.split('.')[0]
+
+        if project_value:
+            project_id_system = f"https://{CDA_SITE}/associated_project"
+            project_id_identifier = Identifier(system=project_id_system, value=project_value, use="official")
             research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
             if research_study_id:
-                part_of_study = {
-                    "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+                extensions.append({
+                    "url": ext_url,
                     "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
-                }
-                extensions.append(part_of_study)
+                })
         else:
-            # try to extract the project name from the subject.id
-            if '.' in subject.id:
-                project_from_id = subject.id.split('.')[0]
-                project_id_system = f"https://{CDA_SITE}/associated_project"
-                project_id_identifier = Identifier(
-                    **{'system': project_id_system, 'value': project_from_id, "use": "official"}
-                )
-                research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
-                if research_study_id:
-                    part_of_study = {
-                        "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
-                        "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
-                    }
-                    extensions.append(part_of_study)
-            else:
-                no_project_logger.info(f"Subject with id {subject.id} does not have any project associations.")
-
-    # def get_part_of_study_extension(self, subject: CDASubject, extensions: list):
-    #     if subject.subject_project_relation:
-    #         print("*******++++++ subject project relation: ",
-    #               type(subject.subject_project_relation),
-    #               subject.subject_project_relation[0].associated_project, "\n")
-    #
-    #         project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
-    #         project_id_identifier = Identifier(
-    #             **{'system': project_id_system, 'value': subject.subject_project_relation[0].associated_project,
-    #                "use": "official"})
-    #         research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
-    #
-    #         if research_study_id:
-    #             part_of_study = {
-    #                 "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
-    #                 "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
-    #             }
-    #             extensions.append(part_of_study)
-    #     else:
-    #         no_project_logger.info(f"Subject with id {subject.id} does not have any project associations.")
-    #         for missing_project in MISSING_RELATIONS:
-    #             if missing_project in subject.id:
-    #                 project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
-    #                 project_id_identifier = Identifier(**{'system': project_id_system, 'value': missing_project, "use": "official"})
-    #                 research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
-    #                 if research_study_id:
-    #                     part_of_study = {
-    #                         "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
-    #                         "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
-    #                     }
-    #                     extensions.append(part_of_study)
+            no_project_logger.info(f"Subject with id {subject.id} does not have any project associations.")
 
 
 class PatientTransformer(Transformer):
@@ -516,25 +484,25 @@ class ResearchStudyTransformer(Transformer):
             rs_identifier = self.research_study_identifier(project, use="official")
             rs_id = self.research_study_mintid(rs_identifier[0])
 
-            condition = []
-
-            if research_subject.primary_diagnosis_condition and re.match(r"^[^\s]+(\s[^\s]+)*$",
-                                                                         research_subject.primary_diagnosis_condition):
-                condition = [CodeableConcept(**{'coding': [{
-                    'code': research_subject.primary_diagnosis_condition,
-                    'display': research_subject.primary_diagnosis_condition,
-                    'system': f'https://{CDA_SITE}/'}]})]
-
             research_study = ResearchStudy(
                 **{
                     'id': rs_id,
                     'identifier': rs_identifier,
                     'status': 'active',
                     'name': project.associated_project,
-                    'title': project.associated_project,
-                    'condition': condition
+                    'title': project.associated_project
                 }
             )
+
+            if research_subject and getattr(research_subject, 'primary_diagnosis_condition') and research_subject.primary_diagnosis_condition and re.match(r"^[^\s]+(\s[^\s]+)*$",
+                                                                         research_subject.primary_diagnosis_condition):
+                condition = [CodeableConcept(**{'coding': [{
+                    'code': research_subject.primary_diagnosis_condition,
+                    'display': research_subject.primary_diagnosis_condition,
+                    'system': f'https://{CDA_SITE}/'}]})]
+
+                research_study.condition = condition
+
             return research_study
 
     @staticmethod
@@ -557,10 +525,18 @@ class ResearchSubjectTransformer(Transformer):
         self.project_id = 'CDA'
         self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
 
-    def research_subject(self, cda_research_subject: CDAResearchSubject, patient: PatientTransformer,
-                         research_study: ResearchStudyTransformer) -> ResearchSubject:
+
+    def research_subject(self, cda_research_subject: CDAResearchSubject, patient: Patient,
+                         research_study: ResearchStudy) -> ResearchSubject:
         rs_identifier = self.research_subject_identifier(cda_research_subject, use="official")
         _id = self.research_subject_mintid(rs_identifier[0])
+
+        part_of_extension = None
+        if hasattr(patient, "extension") and patient.extension:
+            for ext in patient.extension:
+                if ext.url == "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study":
+                    part_of_extension = ext
+                    break
 
         research_subject = ResearchSubject(
             **{
@@ -572,14 +548,17 @@ class ResearchSubjectTransformer(Transformer):
                 },
                 "study": {
                     "reference": f"ResearchStudy/{research_study.id}"
-                }
-            })
-
+                },
+                **({"extension": [part_of_extension]} if part_of_extension else {})
+            }
+        )
         return research_subject
+
 
     @staticmethod
     def research_subject_identifier(cda_research_subject: CDAResearchSubject, use: str) -> list[Identifier]:
         """CDA research subject FHIR Identifier."""
+        assert cda_research_subject.id, "CDA Research Subject doesn't have an id"
         research_subject_id_system = "".join([f"https://{CDA_SITE}/", "researchsubject"])
         research_subject_id_identifier = Identifier(
             **{'system': research_subject_id_system, 'value': cda_research_subject.id, "use": use})
@@ -896,6 +875,13 @@ class SpecimenTransformer(Transformer):
                 **{'system': f"https://{CDA_SITE}/specimen_observation", 'value': _specimen_id, "use":"official"})
             observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
 
+            part_of_extension = None
+            if hasattr(patient, "extension") and patient.extension:
+                for ext in patient.extension:
+                    if ext.url == "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study":
+                        part_of_extension = ext
+                        break
+
             obs = Observation(
                 **{
                     "id": observation_id,
@@ -931,7 +917,8 @@ class SpecimenTransformer(Transformer):
                     "focus": [{
                         "reference": f"Specimen/{_specimen_id}"
                     }],
-                    "component": components
+                    "component": components,
+                    **({"extension": [part_of_extension]} if part_of_extension else {})
                 }
             )
             return obs
@@ -974,14 +961,22 @@ class SpecimenTransformer(Transformer):
             cda_system = "".join([f"https://{CDA_SITE}", ])
             bd_identifier = Identifier(**{'system': cda_system, 'value': str(cda_specimen.anatomical_site), "use":"official"})
 
+            part_of_extension = None
+            if hasattr(patient, "extension") and patient.extension:
+                for ext in patient.extension:
+                    if ext.url == "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study":
+                        part_of_extension = ext
+                        break
+
             body_structure = BodyStructure(
                 **{"id": self.mint_id(identifier=bd_identifier, resource_type="BodyStructure"),
                    "identifier": [bd_identifier],
                    "includedStructure": body_structure_included_structure,
                    "patient": {
-                       "reference": f"Patient/{patient.id}"
-                   }})
+                       "reference": f"Patient/{patient.id}",
+                    **({"extension": [part_of_extension]} if part_of_extension else {})
 
+                   }})
             return body_structure
 
     @staticmethod
@@ -1005,34 +1000,35 @@ class DocumentReferenceTransformer(Transformer):
         self.patient_transformer = patient_transformer
         self.specimen_transformer = specimen_transfomer
 
-    def fhir_document_reference(self, cda_file: CDAFile, patients: list[CDASubject], specimens: list[CDASpecimen]) -> dict:
-
-        category = []
-        # subject_reference = None
-        # based_on = None
-        specimen_reference = None
-        _type = None
+    def fhir_document_reference(self, cda_file: CDAFile, patients: list[CDASubject],
+                                specimens: list[CDASpecimen]) -> dict:
         category = []
         group = None
 
-        _doc_ref_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "id"]),
-                                            "value": cda_file.id,
-                                            "use": "official"})
-        _doc_ref_alias_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "alias"]),
-                                                  "value": str(cda_file.integer_id_alias),
-                                                  "use": "secondary"})
-        _doc_ref_dbgap_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "dbgap_accession_number"]),
-                                                  "value": cda_file.dbgap_accession_number,
-                                                  "use": "secondary"})
+        _doc_ref_identifier = Identifier(
+            system=f"https://{CDA_SITE}/id",
+            value=cda_file.id,
+            use="official"
+        )
+        _doc_ref_alias_identifier = Identifier(
+            system=f"https://{CDA_SITE}/alias",
+            value=str(cda_file.integer_id_alias),
+            use="secondary"
+        )
+        _doc_ref_dbgap_identifier = Identifier(
+            system=f"https://{CDA_SITE}/dbgap_accession_number",
+            value=cda_file.dbgap_accession_number,
+            use="secondary"
+        )
 
         _doc_ref_id = self.mint_id(identifier=_doc_ref_identifier, resource_type="DocumentReference")
-        assert _doc_ref_id, f"DocumentReference must have a mint id."
-        assert _doc_ref_identifier, f"DocumentReference must have an Identifier."
-        # assert specimens, f"DocumentReference must have specimens associated with it."
+        assert _doc_ref_id, "DocumentReference must have a mint id."
+        assert _doc_ref_identifier, "DocumentReference must have an Identifier."
 
         specimen_fhir_ids = []
         specimen_cda_ids = []
         subject_reference = None
+
         if specimens:
             for specimen in specimens:
                 specimen_identifiers = self.specimen_transformer.specimen_identifier(specimen)
@@ -1041,96 +1037,144 @@ class DocumentReferenceTransformer(Transformer):
                     specimen_cda_ids.append(specimen.id)
                     specimen_fhir_ids.append(fhir_specimen_id)
             if specimen_fhir_ids:
-                specimen_references = [Reference(**{"reference": f"Specimen/{s}"}) for s in specimen_fhir_ids]
+                specimen_references = [Reference(reference=f"Specimen/{s}") for s in specimen_fhir_ids]
                 if len(specimen_references) > 1:
-                    group_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "specimen_group"]),
-                                                     "value": "/".join([_doc_ref_identifier.value] + specimen_cda_ids),
-                                                     "use": "secondary"})
-                    group = self.fhir_group(member_ids=specimen_fhir_ids, _type="specimen",
-                                            _identifier=group_identifier)
-                    subject_reference = Reference(**{"reference": f"Group/{group.id}"})
+                    group_identifier = Identifier(
+                        system=f"https://{CDA_SITE}/specimen_group",
+                        value="/".join([_doc_ref_identifier.value] + specimen_cda_ids),
+                        use="secondary"
+                    )
+                    group = self.fhir_group(
+                        member_ids=specimen_fhir_ids,
+                        _type="specimen",
+                        _identifier=group_identifier,
+                        extensions=None
+                    )
+                    subject_reference = Reference(reference=f"Group/{group.id}")
                 elif len(specimen_references) == 1:
                     subject_reference = specimen_references[0]
                 else:
                     logging.error(
-                        f"CDA file ID: {cda_file.id} - with patient FHIR ids: {specimen_fhir_ids} are not valid mint_ids. Skipping transformation.")
+                        f"CDA file ID: {cda_file.id} - specimen FHIR ids {specimen_fhir_ids} are not valid mint_ids. Skipping transformation.")
 
         if not specimens and patients:
-            # subjects (patients) and their alias ids -> mint ids
             patient_fhir_ids = []
             for subject in patients:
                 patient_identifiers = self.patient_transformer.patient_identifier(subject)
                 fhir_patient_id = self.patient_transformer.patient_mintid(patient_identifiers[0])
                 if fhir_patient_id and self.is_valid_uuid(fhir_patient_id):
                     patient_fhir_ids.append(fhir_patient_id)
-
             if len(patient_fhir_ids) == 1:
-                subject_reference = Reference(**{"reference": f"Patient/{patient_fhir_ids[0]}"})
+                subject_reference = Reference(reference=f"Patient/{patient_fhir_ids[0]}")
             elif len(patient_fhir_ids) > 1:
-                group = self.fhir_group(member_ids=patient_fhir_ids, _type="patient", _identifier=_doc_ref_identifier)
-                subject_reference = Reference(**{"reference": f"Group/{group.id}"})
+                group = self.fhir_group(
+                    member_ids=patient_fhir_ids,
+                    _type="patient",
+                    _identifier=_doc_ref_identifier,
+                    extensions=None  # Will be set below.
+                )
+                subject_reference = Reference(reference=f"Group/{group.id}")
             else:
-                logging.error(f"CDA file ID: {cda_file.id} - with patient FHIR ids: {patient_fhir_ids} are not valid mint_ids. "
-                              f"Skipping transformation.")
+                logging.error(
+                    f"CDA file ID: {cda_file.id} - patient FHIR ids {patient_fhir_ids} are not valid mint_ids. Skipping transformation.")
                 return {"DocumentReference": None, "Group": None}
 
+        _type = None
         if cda_file.file_format:
-            _type = CodeableConcept(**{"coding":
-                                           [{"system": "".join([f"https://{CDA_SITE}/", "file_format"]),
-                                             "code": cda_file.file_format,
-                                             "display": cda_file.file_format}]
-                                       })
-
+            _type = CodeableConcept(
+                coding=[{
+                    "system": f"https://{CDA_SITE}/file_format",
+                    "code": cda_file.file_format,
+                    "display": cda_file.file_format
+                }]
+            )
         if cda_file.data_category:
-            category.append(CodeableConcept(**{"coding": [{
-                "system": "".join([f"https://{CDA_SITE}/", "data_category"]),
-                "code": cda_file.data_category,
-                "display": cda_file.data_category}]
-            }))
+            category.append(CodeableConcept(
+                coding=[{
+                    "system": f"https://{CDA_SITE}/data_category",
+                    "code": cda_file.data_category,
+                    "display": cda_file.data_category
+                }]
+            ))
         if cda_file.data_type:
-            category.append(CodeableConcept(**{"coding": [{
-                "system": "".join([f"https://{CDA_SITE}/", "data_type"]),
-                "code": cda_file.data_type,
-                "display": cda_file.data_type}]
-            }))
+            category.append(CodeableConcept(
+                coding=[{
+                    "system": f"https://{CDA_SITE}/data_type",
+                    "code": cda_file.data_type,
+                    "display": cda_file.data_type
+                }]
+            ))
         if cda_file.data_modality:
-            category.append(CodeableConcept(**{"coding": [{
-                "system": "".join([f"https://{CDA_SITE}/", "data_modality"]),
-                "code": cda_file.data_modality,
-                "display": cda_file.data_modality}]
-            }))
+            category.append(CodeableConcept(
+                coding=[{
+                    "system": f"https://{CDA_SITE}/data_modality",
+                    "code": cda_file.data_modality,
+                    "display": cda_file.data_modality
+                }]
+            ))
         if cda_file.imaging_modality:
-            category.append(CodeableConcept(**{"coding": [{
-                "system": "".join([f"https://{CDA_SITE}/", "imaging_modality"]),
-                "code": cda_file.imaging_modality,
-                "display": cda_file.imaging_modality}]
-            }))
+            category.append(CodeableConcept(
+                coding=[{
+                    "system": f"https://{CDA_SITE}/imaging_modality",
+                    "code": cda_file.imaging_modality,
+                    "display": cda_file.imaging_modality
+                }]
+            ))
         if cda_file.imaging_series:
-            category.append(CodeableConcept(**{"coding": [{
-                "system": "".join([f"https://{CDA_SITE}/", "imaging_series"]),
-                "code": cda_file.imaging_series,
-                "display": cda_file.imaging_series}]
-            }))
+            category.append(CodeableConcept(
+                coding=[{
+                    "system": f"https://{CDA_SITE}/imaging_series",
+                    "code": cda_file.imaging_series,
+                    "display": cda_file.imaging_series
+                }]
+            ))
 
-        doc_ref = DocumentReference(**{
-            "id": _doc_ref_id,
-            "identifier": [_doc_ref_identifier, _doc_ref_dbgap_identifier, _doc_ref_alias_identifier],
-            "status": "current",
-            "version": "1",
-            "subject": subject_reference,
-            "type": _type,
-            "category": category,
-            "content": [
-                {
-                    "attachment": self.fhir_attachment(cda_file),
-                    "profile": [
-                        {
-                            "valueUri": cda_file.drs_uri
-                        }
-                    ]
-                }
-            ]
-        })
+        part_of_extensions = []
+        candidate_subject = None
+        if patients:
+            candidate_subject = patients[0]
+        elif specimens:
+            candidate_subject = self.session.execute(
+                select(CDASubject).filter_by(id=specimens[0].derived_from_subject)
+            ).scalar_one_or_none()
+        if candidate_subject:
+            self.get_part_of_study_extension(candidate_subject, extensions=part_of_extensions)
+
+        if group and part_of_extensions:
+            if specimens:
+                group = self.fhir_group(
+                    member_ids=specimen_fhir_ids,
+                    _type="specimen",
+                    _identifier=group_identifier,
+                    extensions=part_of_extensions
+                )
+            else:
+                group = self.fhir_group(
+                    member_ids=patient_fhir_ids,
+                    _type="patient",
+                    _identifier=_doc_ref_identifier,
+                    extensions=part_of_extensions
+                )
+            subject_reference = Reference(reference=f"Group/{group.id}")
+
+        doc_ref = DocumentReference(
+            **{
+                "id": _doc_ref_id,
+                "identifier": [_doc_ref_identifier, _doc_ref_dbgap_identifier, _doc_ref_alias_identifier],
+                "status": "current",
+                "version": "1",
+                "subject": subject_reference,
+                "type": _type,
+                "category": category,
+                "content": [
+                    {
+                        "attachment": self.fhir_attachment(cda_file),
+                        "profile": [{"valueUri": cda_file.drs_uri}]
+                    }
+                ],
+                **({"extension": part_of_extensions} if part_of_extensions else {})
+            }
+        )
         return {"DocumentReference": doc_ref, "Group": group}
 
     @staticmethod
@@ -1144,23 +1188,23 @@ class DocumentReferenceTransformer(Transformer):
         })
         return attachment
 
-    def fhir_group(self, member_ids: list, _type: str, _identifier: Identifier) -> Group:
-
-        ref_type = None
-
-        if _type == "patient":
-            ref_type = "Patient"
-        elif _type == "specimen":
-            ref_type = "Specimen"
-
+    def fhir_group(self, member_ids: list, _type: str, _identifier: Identifier, extensions: list = None) -> Group:
+        ref_type = "Patient" if _type == "patient" else "Specimen" if _type == "specimen" else None
         assert ref_type, "Group member Reference FHIR type must be defined"
 
-        _members = [GroupMember(**{'entity': Reference(**{"reference": f"{ref_type}/{m}"})}) for m in member_ids]
+        _members = [GroupMember(entity=Reference(reference=f"{ref_type}/{m}")) for m in member_ids]
         _identifier.value = "_".join([_identifier.value, _type])
         group_id = self.mint_id(identifier=_identifier, resource_type="Group")
-        group = Group(**{'id': group_id, "identifier": [_identifier], "membership": 'definitional',
-                         'member': _members, "type": _type})
-        return group
+        group_data = {
+            "id": group_id,
+            "identifier": [_identifier],
+            "membership": "definitional",
+            "member": _members,
+            "type": _type,
+        }
+        if extensions:
+            group_data["extension"] = extensions
+        return Group(**group_data)
 
 
 class MedicationAdministrationTransformer(Transformer):
@@ -1179,7 +1223,6 @@ class MedicationAdministrationTransformer(Transformer):
         db_file_path = "data/chembl_34.db"
         def get_chembl_compound_info(db_file_path, drug_names: list, _limit=limit) -> list:
             """Query Chembl COMPOUND_RECORDS by COMPOUND_NAME for FHIR Substance"""
-            # assert drug_names, "The drug_names list is empty. Please provide at least one drug name."
             if len(drug_names) == 1:
                 _drug_names = f"('{drug_names[0].upper()}')"
             else:

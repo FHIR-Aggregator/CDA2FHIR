@@ -127,13 +127,21 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             for treatment in treatments:
                 _subject_treatment = (
                     session.query(CDASubject)
-                    .join(CDASubjectResearchSubject, CDASubject.id == CDASubjectResearchSubject.subject_id)
-                    .join(CDAResearchSubject, CDASubjectResearchSubject.researchsubject_id == CDAResearchSubject.id)
-                    .join(CDAResearchSubjectTreatment,
-                          CDAResearchSubject.id == CDAResearchSubjectTreatment.researchsubject_id)
-                    .filter(CDAResearchSubjectTreatment.treatment_id == treatment.id)
+                    .join(CDASubjectResearchSubject, CDASubject.integer_id_alias == CDASubjectResearchSubject.subject_alias)
+                    .join(CDAResearchSubject, CDASubjectResearchSubject.researchsubject_alias == CDAResearchSubject.integer_id_alias)
+                    .join(CDAResearchSubjectTreatment, CDAResearchSubject.integer_id_alias == CDAResearchSubjectTreatment.researchsubject_alias)
+                    .filter(CDAResearchSubjectTreatment.treatment_alias == treatment.integer_id_alias)
                     .all()
                 )
+                #     _subject_treatment = (
+                #         session.query(CDASubject)
+                #         .join(CDASubjectResearchSubject, CDASubject.id == CDASubjectResearchSubject.subject_id)
+                #         .join(CDAResearchSubject, CDASubjectResearchSubject.researchsubject_id == CDAResearchSubject.id)
+                #         .join(CDAResearchSubjectTreatment,
+                #               CDAResearchSubject.id == CDAResearchSubjectTreatment.researchsubject_id)
+                #         .filter(CDAResearchSubjectTreatment.treatment_id == treatment.id)
+                #         .all()
+                #     )
 
                 if _subject_treatment:
                     for subject in _subject_treatment:
@@ -170,6 +178,12 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             # lookup the subjects for a mutation, cache the results
             @lru_cache(maxsize=None)
             def lookup_mutation_subjects(_session, integer_id_alias):
+                # _mutation_subjects = (
+                #     _session.query(CDASubject)
+                #     .join(CDASubjectMutation, CDASubject.integer_id_alias == CDASubjectMutation.subject_alias)
+                #     .filter(CDASubjectMutation.mutation_alias == integer_id_alias)
+                #     .all()
+                # )
                 _mutation_subjects = (
                     _session.query(CDASubject)
                     .join(CDASubjectMutation, CDASubject.integer_id_alias == CDASubjectMutation.subject_alias)
@@ -297,6 +311,11 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             for subject in subjects:
                 patient_identifiers = patient_transformer.patient_identifier(subject)
                 patient_id = patient_transformer.patient_mintid(patient_identifiers[0])
+
+                part_ext = []
+                patient_transformer.get_part_of_study_extension(subject, extensions=part_ext)
+
+
                 if subject.cause_of_death and patient_id:
                     obs = patient_transformer.observation_cause_of_death(subject.cause_of_death)
                     obs_identifier = Identifier(
@@ -304,6 +323,8 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     obs.id = patient_transformer.mint_id(identifier=obs_identifier, resource_type="Observation")
                     obs.subject = {"reference": f"Patient/{patient_id}"}
                     obs.focus = [{"reference": f"Patient/{patient_id}"}]
+                    if part_ext and (not hasattr(obs, "extension") or not obs.extension):
+                        obs.extension = part_ext
                     observations.append(obs)
 
                 if subject.days_to_death and patient_id:
@@ -313,6 +334,8 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     obs_days_to_death.id = patient_transformer.mint_id(identifier=obs_days_to_death_identifier, resource_type="Observation")
                     obs_days_to_death.subject = {"reference": f"Patient/{patient_id}"}
                     obs_days_to_death.focus = [{"reference": f"Patient/{patient_id}"}]
+                    if part_ext and (not hasattr(obs_days_to_death, "extension") or not obs_days_to_death.extension):
+                        obs_days_to_death.extension = part_ext
                     observations.append(obs_days_to_death)
 
                 if subject.days_to_birth and patient_id:
@@ -322,6 +345,8 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     obs_days_to_birth.id = patient_transformer.mint_id(identifier=obs_days_to_birth_identifier, resource_type="Observation")
                     obs_days_to_birth.subject = {"reference": f"Patient/{patient_id}"}
                     obs_days_to_birth.focus = [{"reference": f"Patient/{patient_id}"}]
+                    if part_ext and (not hasattr(obs_days_to_birth, "extension") or not obs_days_to_birth.extension):
+                        obs_days_to_birth.extension = part_ext
                     observations.append(obs_days_to_birth)
 
             # ResearchStudy and ResearchSubject -----------------------------------
@@ -519,13 +544,14 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                             continue
 
                         for rs in rs_list:
-                            try:
-                                rsub = research_subject_transformer.research_subject(rs, patient_data, study)
-                                research_subjects.append(rsub)
-                                logger.info("Created research subject: %s", rsub)
-                            except Exception:
-                                logger.exception("Error creating research subject for subject %s", subject.id)
-                                continue
+                            if rs:
+                                try:
+                                    rsub = research_subject_transformer.research_subject(rs, patient_data, study)
+                                    research_subjects.append(rsub)
+                                    logger.info("Created research subject: %s", rsub)
+                                except Exception:
+                                    logger.exception("Error creating research subject for subject %s", subject.id)
+                                    continue
 
                         try:
                             part_refs = compute_part_of_references(session, subject, proj_relation_map)
@@ -588,13 +614,21 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             conditions = []
             condition_observations = []
             for diagnosis in diagnoses:
+                # _subject_diagnosis = (
+                #     session.query(CDASubject)
+                #     .join(CDASubjectResearchSubject, CDASubject.id == CDASubjectResearchSubject.subject_id)
+                #     .join(CDAResearchSubject, CDASubjectResearchSubject.researchsubject_id == CDAResearchSubject.id)
+                #     .join(CDAResearchSubjectDiagnosis,
+                #           CDAResearchSubject.id == CDAResearchSubjectDiagnosis.researchsubject_id)
+                #     .filter(CDAResearchSubjectDiagnosis.diagnosis_id == diagnosis.id)
+                #     .all()
+                # )
                 _subject_diagnosis = (
                     session.query(CDASubject)
-                    .join(CDASubjectResearchSubject, CDASubject.id == CDASubjectResearchSubject.subject_id)
-                    .join(CDAResearchSubject, CDASubjectResearchSubject.researchsubject_id == CDAResearchSubject.id)
-                    .join(CDAResearchSubjectDiagnosis,
-                          CDAResearchSubject.id == CDAResearchSubjectDiagnosis.researchsubject_id)
-                    .filter(CDAResearchSubjectDiagnosis.diagnosis_id == diagnosis.id)
+                    .join(CDASubjectResearchSubject, CDASubject.integer_id_alias == CDASubjectResearchSubject.subject_alias)
+                    .join(CDAResearchSubject, CDASubjectResearchSubject.researchsubject_alias == CDAResearchSubject.integer_id_alias)
+                    .join(CDAResearchSubjectDiagnosis, CDAResearchSubject.integer_id_alias == CDAResearchSubjectDiagnosis.researchsubject_alias)
+                    .filter(CDAResearchSubjectDiagnosis.diagnosis_alias == diagnosis.integer_id_alias)
                     .all()
                 )
 
@@ -701,24 +735,34 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             file_subject_alias = aliased(CDASubject)
             specimen_subject_alias = aliased(CDASubject)
 
+            # stmt = (
+            #     select(CDAFile)
+            #     .outerjoin(CDAFileSpecimen, CDAFile.id == CDAFileSpecimen.file_id)
+            #     .outerjoin(CDASpecimen, CDAFileSpecimen.specimen_id == CDASpecimen.id)
+            #     .outerjoin(CDAFileSubject, CDAFile.id == CDAFileSubject.file_id)
+            #     .outerjoin(file_subject_alias, CDAFileSubject.subject_id == file_subject_alias.id)
+            #     .outerjoin(specimen_subject_alias, CDASpecimen.derived_from_subject == specimen_subject_alias.id)
+            #     .filter(
+            #         or_(
+            #             file_subject_alias.species.in_({'Human', 'Homo sapiens'}),
+            #             CDASpecimen.derived_from_subject.isnot(None),
+            #             and_(
+            #                 CDASpecimen.derived_from_subject.isnot(None),
+            #                 specimen_subject_alias.species.in_({'Human', 'Homo sapiens'}),
+            #             ),
+            #         )
+            #     )
+            # )
+            # files = session.execute(stmt).scalars().all()
             stmt = (
                 select(CDAFile)
-                .outerjoin(CDAFileSpecimen, CDAFile.id == CDAFileSpecimen.file_id)
-                .outerjoin(CDASpecimen, CDAFileSpecimen.specimen_id == CDASpecimen.id)
-                .outerjoin(CDAFileSubject, CDAFile.id == CDAFileSubject.file_id)
-                .outerjoin(file_subject_alias, CDAFileSubject.subject_id == file_subject_alias.id)
+                .outerjoin(CDAFileSpecimen, CDAFile.integer_id_alias == CDAFileSpecimen.file_alias)
+                .outerjoin(CDASpecimen, CDASpecimen.integer_id_alias == CDAFileSpecimen.specimen_alias)
+                .outerjoin(CDAFileSubject, CDAFile.integer_id_alias == CDAFileSubject.file_alias)
+                .outerjoin(file_subject_alias, CDAFileSubject.subject_alias == file_subject_alias.integer_id_alias)
                 .outerjoin(specimen_subject_alias, CDASpecimen.derived_from_subject == specimen_subject_alias.id)
-                .filter(
-                    or_(
-                        file_subject_alias.species.in_({'Human', 'Homo sapiens'}),
-                        CDASpecimen.derived_from_subject.isnot(None),
-                        and_(
-                            CDASpecimen.derived_from_subject.isnot(None),
-                            specimen_subject_alias.species.in_({'Human', 'Homo sapiens'}),
-                        ),
-                    )
-                )
             )
+
             files = session.execute(stmt).scalars().all()
 
             if not files:
