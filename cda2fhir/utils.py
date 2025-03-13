@@ -285,12 +285,19 @@ def fhir_ndjson(entity, out_path):
             file.write(json.dumps(entity, ensure_ascii=False))
 
 
+# def deduplicate_and_save(entities, filename, meta_path, save=True):
+#     if save and entities:
+#         # unique_entities = {entity.id: entity for entity in entities if entity}.values()
+#         # fhir_entities_json = [orjson.loads(entity.json()) for entity in unique_entities]
+#         fhir_ndjson(entities, str(Path(meta_path) / filename))
+
 def deduplicate_and_save(entities, filename, meta_path, save=True):
     if save and entities:
-        # unique_entities = {entity.id: entity for entity in entities if entity}.values()
-        # fhir_entities_json = [orjson.loads(entity.json()) for entity in unique_entities]
-        fhir_ndjson(entities, str(Path(meta_path) / filename))
-
+        unique_entities = {
+            entity['id'] if isinstance(entity, dict) else entity.id: entity
+            for entity in entities
+        }.values()
+        fhir_ndjson(list(unique_entities), str(Path(meta_path) / filename))
 
 def remove_empty_dicts(data):
     """
@@ -363,24 +370,6 @@ def convert_value_to_float(data):
     return data
 
 
-# def clean_resources(entities):
-#     cleaned_resource = []
-#     for resource in entities:
-#         resource_type = resource["resourceType"]
-#         cleaned_resource_dict = remove_empty_dicts(resource)
-#         try:
-#             validated_resource = validate_fhir_resource_from_type(resource_type, cleaned_resource_dict).model_dump_json()
-#         except ValueError as e:
-#             print(f"Validation failed for {resource_type}: {e}")
-#             continue
-#         # handle pydantic Decimal cases
-#         validated_resource = convert_decimal_to_float(orjson.loads(validated_resource))
-#         validated_resource = convert_value_to_float(validated_resource)
-#         validated_resource = orjson.loads(orjson.dumps(validated_resource).decode("utf-8"))
-#         cleaned_resource.append(validated_resource)
-#
-#     return cleaned_resource
-
 def clean_resources(entities):
     cleaned_resource = []
     for resource in entities:
@@ -397,7 +386,6 @@ def clean_resources(entities):
             print(f"Validation failed for {resource_type}: {e}")
             continue
 
-        # Handle pydantic Decimal cases
         validated_resource = convert_decimal_to_float(orjson.loads(validated_resource))
         validated_resource = convert_value_to_float(validated_resource)
         validated_resource = orjson.loads(orjson.dumps(validated_resource).decode("utf-8"))

@@ -270,12 +270,12 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     if fhir_specimen:
                         fhir_specimens.append(fhir_specimen)
 
-                        specimen_bd = specimen_transformer.specimen_body_structure(specimen, _specimen_patient[0])
+                        specimen_bd = specimen_transformer.specimen_body_structure(specimen, _specimen_patient[0], fhir_specimen, part_of_study_extensions=None)
                         if specimen_bd:
                             specimen_bds.append(specimen_bd)
 
                         _specimen_obs = specimen_transformer.specimen_observation(specimen, _specimen_patient[0],
-                                                                                  fhir_specimen.id)
+                                                                                  fhir_specimen.id, fhir_specimen)
                         if _specimen_obs:
                             observations.append(_specimen_obs)
 

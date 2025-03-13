@@ -787,9 +787,33 @@ class SpecimenTransformer(Transformer):
         fhir_specimen_identifier = self.specimen_identifier(cda_specimen)
         fhir_specimen_id = self.specimen_mintid(fhir_specimen_identifier[0])
 
-        project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
-        project_id_identifier = Identifier(**{'system': project_id_system, 'value': str(cda_specimen.associated_project), "use": "official"})
-        research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
+        associated_project_value = str(cda_specimen.associated_project)
+        if ';' in associated_project_value:
+            projects = associated_project_value.split(';')
+        else:
+            projects = [associated_project_value]
+
+        research_study_refs = []
+        project_id_system = f"https://{CDA_SITE}/associated_project"
+        for project in projects:
+            project = project.strip()
+            if project:
+                project_id_identifier = Identifier(system=project_id_system, value=project, use="official")
+                research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
+                research_study_refs.append({"reference": f"ResearchStudy/{research_study_id}"})
+
+        study_extensions = [
+            {
+                "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+                "valueReference": ref
+            }
+            for ref in research_study_refs
+        ]
+
+        # there are one to many cases
+        # project_id_system = "".join([f"https://{CDA_SITE}/", "associated_project"])
+        # project_id_identifier = Identifier(**{'system': project_id_system, 'value': str(cda_specimen.associated_project), "use": "official"})
+        # research_study_id = self.mint_id(identifier=project_id_identifier, resource_type="ResearchStudy")
 
         parent = None
         if cda_specimen.derived_from_specimen and cda_specimen.derived_from_specimen != "initial specimen":
@@ -802,7 +826,7 @@ class SpecimenTransformer(Transformer):
             }]
 
         collection = None
-        fhir_bodysite = self.specimen_body_structure(cda_specimen, patient)
+        fhir_bodysite = self.specimen_body_structure(cda_specimen, patient, fhir_specimen=None, part_of_study_extensions=study_extensions)
         if fhir_bodysite:
             collection = SpecimenCollection(
                 **{
@@ -835,10 +859,7 @@ class SpecimenTransformer(Transformer):
                     "reference": f"Patient/{patient.id}"
                 },
                 "collection": collection,
-                "extension": [{
-                    "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
-                    "valueReference": {"reference": f"ResearchStudy/{research_study_id}"}
-                }]
+                "extension": study_extensions # has cases where specimen is part of multiple studies
             }
         )
 
@@ -847,7 +868,7 @@ class SpecimenTransformer(Transformer):
 
         return specimen
 
-    def specimen_observation(self, cda_specimen, patient, _specimen_id) -> Observation:
+    def specimen_observation(self, cda_specimen, patient, _specimen_id, fhir_specimen:Specimen) -> Observation:
         components = []
         if cda_specimen.days_to_collection:
             days_to_collection = self.get_component("days_to_collection", value=cda_specimen.days_to_collection,
@@ -874,13 +895,6 @@ class SpecimenTransformer(Transformer):
             observation_identifier = Identifier(
                 **{'system': f"https://{CDA_SITE}/specimen_observation", 'value': _specimen_id, "use":"official"})
             observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
-
-            part_of_extension = None
-            if hasattr(patient, "extension") and patient.extension:
-                for ext in patient.extension:
-                    if ext.url == "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study":
-                        part_of_extension = ext
-                        break
 
             obs = Observation(
                 **{
@@ -917,13 +931,19 @@ class SpecimenTransformer(Transformer):
                     "focus": [{
                         "reference": f"Specimen/{_specimen_id}"
                     }],
-                    "component": components,
-                    **({"extension": [part_of_extension]} if part_of_extension else {})
+                    "component": components
                 }
             )
+
+            extensions = []
+            if hasattr(fhir_specimen, "extension"):
+                extensions = fhir_specimen.extension
+            if extensions:
+                obs.extension = extensions
+
             return obs
 
-    def specimen_body_structure(self, cda_specimen, patient) -> BodyStructure:
+    def specimen_body_structure(self, cda_specimen, patient, fhir_specimen:Specimen| None, part_of_study_extensions: list | None) -> BodyStructure:
 
         if (cda_specimen.anatomical_site and 'Not specified in data' not in cda_specimen.anatomical_site
                 and re.match(r"^[^\s]+(\s[^\s]+)*$", cda_specimen.anatomical_site)):
@@ -961,23 +981,26 @@ class SpecimenTransformer(Transformer):
             cda_system = "".join([f"https://{CDA_SITE}", ])
             bd_identifier = Identifier(**{'system': cda_system, 'value': str(cda_specimen.anatomical_site), "use":"official"})
 
-            part_of_extension = None
-            if hasattr(patient, "extension") and patient.extension:
-                for ext in patient.extension:
-                    if ext.url == "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study":
-                        part_of_extension = ext
-                        break
 
             body_structure = BodyStructure(
                 **{"id": self.mint_id(identifier=bd_identifier, resource_type="BodyStructure"),
                    "identifier": [bd_identifier],
                    "includedStructure": body_structure_included_structure,
                    "patient": {
-                       "reference": f"Patient/{patient.id}",
-                    **({"extension": [part_of_extension]} if part_of_extension else {})
+                       "reference": f"Patient/{patient.id}"
 
                    }})
-            return body_structure
+
+            extensions = []
+            if fhir_specimen:
+                if hasattr(fhir_specimen, "extension"):
+                    extensions = fhir_specimen.extension
+                if extensions:
+                    body_structure.extension = extensions
+            elif part_of_study_extensions:
+                body_structure.extension = part_of_study_extensions
+
+                return body_structure
 
     @staticmethod
     def specimen_identifier(cda_specimen: CDASpecimen) -> list[Identifier]:
@@ -1071,7 +1094,7 @@ class DocumentReferenceTransformer(Transformer):
                     member_ids=patient_fhir_ids,
                     _type="patient",
                     _identifier=_doc_ref_identifier,
-                    extensions=None  # Will be set below.
+                    extensions=None
                 )
                 subject_reference = Reference(reference=f"Group/{group.id}")
             else:
