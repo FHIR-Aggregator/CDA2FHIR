@@ -270,7 +270,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     if fhir_specimen:
                         fhir_specimens.append(fhir_specimen)
 
-                        specimen_bd = specimen_transformer.specimen_body_structure(specimen, _specimen_patient[0], fhir_specimen, part_of_study_extensions=None)
+                        specimen_bd = specimen_transformer.specimen_body_structure(specimen, _specimen_patient[0], fhir_specimen=fhir_specimen, part_of_study_extensions=None)
                         if specimen_bd:
                             specimen_bds.append(specimen_bd)
 
@@ -284,6 +284,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 cleaned_fhir_specimens = utils.clean_resources(fhir_specimens)
                 utils.deduplicate_and_save(cleaned_fhir_specimens, "Specimen.ndjson", meta_path, save)
                 if specimen_bds:
+                    specimen_bds = utils.load_list_entities(specimen_bds)
                     cleaned_specimen_bds = utils.clean_resources(specimen_bds)
                     utils.deduplicate_and_save(cleaned_specimen_bds, "BodyStructure.ndjson", meta_path, save)
 
@@ -394,7 +395,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     logger.exception("Error retrieving identifiers for study %s", study.name)
                     raise
 
-            def compute_part_of_references(session, subject, proj_relation_map):
+            def compute_part_of_references(session, subject, proj_relation_map, research_studies):
                 """
                 Compute the partOf references for a subject using a preloaded proj_relation_map.
                 Returns a deduplicated list of FHIR Reference objects based on their 'reference' string.
@@ -415,6 +416,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     for (identifier_obj,) in identifier_results:
                         prog_study = research_study_transformer.program_research_study(name=identifier_obj.system)
                         if prog_study:
+                            research_studies.append(prog_study)
                             ref = Reference(reference=f"ResearchStudy/{prog_study.id}")
                             part_refs.append(ref)
 
@@ -431,6 +433,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                 if getattr(rel, attr) == project_name:
                                     prog = research_study_transformer.program_research_study(name=default)
                                     if prog:
+                                        research_studies.append(prog)
                                         ref = Reference(reference=f"ResearchStudy/{prog.id}")
                                         part_refs.append(ref)
                             for field in ("program", "sub_program"):
@@ -438,6 +441,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                 if val:
                                     prog = research_study_transformer.program_research_study(name=val)
                                     if prog:
+                                        research_studies.append(prog)
                                         ref = Reference(reference=f"ResearchStudy/{prog.id}")
                                         part_refs.append(ref)
 
@@ -554,7 +558,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                     continue
 
                         try:
-                            part_refs = compute_part_of_references(session, subject, proj_relation_map)
+                            part_refs = compute_part_of_references(session, subject, proj_relation_map, research_studies)
                             if part_refs:
                                 existing_refs = {ref.reference: ref for ref in study.partOf} if study.partOf else {}
                                 for ref in part_refs:
