@@ -81,6 +81,10 @@ class Transformer:
         self.session = session
         self.project_id = 'fhir_aggregator-cda'
         self.namespace = uuid3(NAMESPACE_DNS, CDA_SITE)
+        self.SYSTEM_PDC = "https://proteomic.datacommons.cancer.gov/pdc/"
+        self.SYSTEM_GDC = "https://gdc.cancer.gov/"
+        self.SYSTEM_IDC = "https://portal.imaging.datacommons.cancer.gov/"
+        self.SYSTEM_ICDC = "https://caninecommons.cancer.gov/"
 
     @staticmethod
     def get_component(key, value=None, component_type=None,
@@ -156,13 +160,21 @@ class Transformer:
         """create top level program FHIR ResearchStudy"""
         _program_identifier = Identifier(**{"system": "".join([f"https://{CDA_SITE}/", "system"]), "value": name, "use": "official"})
         _id = self.mint_id(identifier=_program_identifier, resource_type="ResearchStudy")
+        # All programs are part of - The NCI Cancer Research Data Commons (CRDC)
+        _crdc_identifier = Identifier(
+            **{"system": "".join([f"https://{CDA_SITE}/", "system"]), "value": 'CRDC', "use": "official"})
+        _crdc_id = self.mint_id(identifier=_program_identifier, resource_type="ResearchStudy")
         research_study = ResearchStudy(
             **{
                 'id': _id,
                 'identifier': [_program_identifier],
                 'status': 'active',
                 'name': name,
-                'title': name
+                'title': name,
+                'extension': [{
+                            "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+                            "valueReference": {"reference": f"ResearchStudy/{_crdc_id}"}
+                        }]
             }
         )
         if research_study:
@@ -179,8 +191,8 @@ class Transformer:
                 return ext.url
             return None
 
-        if any(get_extension_url(ext) == ext_url for ext in extensions):
-            return
+        # if any(get_extension_url(ext) == ext_url for ext in extensions):
+        #     return
 
         project_value = None
         if subject.subject_project_relation and len(subject.subject_project_relation) > 0:
@@ -275,12 +287,45 @@ class PatientTransformer(Transformer):
 
     def patient_identifier(self, subject: CDASubject) -> list[Identifier]:
         """FHIR patient Identifier from a CDA subject."""
+        all_identifiers = []
+        if subject.subject_identifier:
+            for identifier in subject.subject_identifier:
+                system = identifier.system
+                field_name = identifier.field_name
+                value = identifier.value
+                if system == "GDC":
+                    if "." in field_name:
+                        field_name = field_name.split(".")[1].strip()
+                    gdc_system = "".join([self.SYSTEM_GDC, field_name])
+                    all_identifiers.append(Identifier(**{'system': gdc_system, 'value': str(value), "use": "secondary"}))
+                if system == "PDC":
+                    if "." in field_name:
+                        field_name = field_name.split(".")[1].strip()
+                    pdc_system = "".join([self.SYSTEM_PDC, field_name])
+                    all_identifiers.append(
+                        Identifier(**{'system': pdc_system, 'value': str(value), "use": "secondary"}))
+                if system == "IDC":
+                    if "." in field_name:
+                        field_name = field_name.split(".")[1].strip()
+                    idc_system = "".join([self.SYSTEM_IDC, field_name])
+                    all_identifiers.append(
+                        Identifier(**{'system': idc_system, 'value': str(value), "use": "secondary"}))
+                if system == "ICDC":
+                    if "." in field_name:
+                        field_name = field_name.split(".")[1].strip()
+                    icdc_system = "".join([self.SYSTEM_ICDC, field_name])
+                    all_identifiers.append(
+                        Identifier(**{'system': icdc_system, 'value': str(value), "use": "secondary"}))
+
         subject_id_system = "".join([f"https://{CDA_SITE}/", "subject_id"])
         subject_id_identifier = Identifier(**{'system': subject_id_system, 'value': str(subject.id), "use": "official"})
+        all_identifiers.append(subject_id_identifier)
 
         subject_alias_system = "".join([f"https://{CDA_SITE}/", "subject_alias"])
         subject_alias_identifier = Identifier(**{'system': subject_alias_system, 'value': str(subject.integer_id_alias), "use": "secondary"})
-        return [subject_id_identifier, subject_alias_identifier]
+        all_identifiers.append(subject_alias_identifier)
+
+        return all_identifiers
 
     def patient_mintid(self, patient_identifier: Identifier) -> str:
         """FHIR patient ID from a CDA subject."""
@@ -493,7 +538,8 @@ class ResearchStudyTransformer(Transformer):
                     'identifier': rs_identifier,
                     'status': 'active',
                     'name': project.associated_project,
-                    'title': project.associated_project
+                    'title': project.associated_project,
+                    'extension': []
                 }
             )
 

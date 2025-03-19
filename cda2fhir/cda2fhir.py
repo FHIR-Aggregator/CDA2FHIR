@@ -564,6 +564,16 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                 for ref in part_refs:
                                     existing_refs.setdefault(ref.reference, ref)
                                 study.partOf = list(existing_refs.values())
+                            part_of_extension = []
+                            for ref in study.partOf:
+                                if ref:
+                                    part_of_extension.append({
+                                        "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+                                        "valueReference": ref
+                                    })
+                            if part_of_extension and study.extension:
+                                study.extension.append(part_of_extension)
+
                         except Exception:
                             logger.exception("Error computing partOf references for subject %s and study %s",
                                              subject.id, study.id)
