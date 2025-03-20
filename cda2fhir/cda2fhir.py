@@ -662,15 +662,13 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
                             # condition stage observation
                             if condition.stage:
-                                stage = condition.stage[0]
-                                if stage.assessment and stage.summary:
-                                    _display = stage.summary.coding[0].display
-                                    if _display:
-                                        observation = condition_transformer.condition_observation(diagnosis, _display,
-                                                                                                  _patient_diagnosis[0],
-                                                                                                  condition.id)
-                                        if observation:
-                                            condition_observations.append(observation)
+                                stage_code, _display = condition_transformer.fetch_stage_info(diagnosis)
+                                if _display:
+                                    observation = condition_transformer.condition_observation(diagnosis, stage_code, _display,
+                                                                                              _patient_diagnosis[0],
+                                                                                              condition.id)
+                                    if observation:
+                                        condition_observations.append(observation)
 
                             if diagnosis.method_of_diagnosis:
                                 obs_method_of_diagnosis = condition_transformer.observation_method_of_diagnosis(diagnosis.method_of_diagnosis)
@@ -681,6 +679,16 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                                                                          resource_type="Observation")
                                 obs_method_of_diagnosis.subject = {"reference": f"Patient/{_patient_diagnosis[0].id}"}
                                 obs_method_of_diagnosis.focus = [{"reference": f"Condition/{condition.id}"}]
+
+                                part_of_extension = None
+                                if hasattr(_patient_diagnosis, "extension") and _patient_diagnosis.extension:
+                                    for ext in _patient_diagnosis.extension:
+                                        if ext.url == "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study":
+                                            part_of_extension = ext
+                                            break
+                                if part_of_extension:
+                                    obs_method_of_diagnosis.extension = part_of_extension
+
                                 condition_observations.append(obs_method_of_diagnosis)
 
             if save and conditions:

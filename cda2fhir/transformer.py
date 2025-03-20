@@ -635,19 +635,16 @@ class ConditionTransformer(Transformer):
         condition_identifier = self.condition_identifier(diagnosis)
         condition_id = self.condition_mintid(condition_identifier[0])
 
-        _stage_display = None
-        if diagnosis.stage:
-            _stage_display = diagnosis.stage
-        elif diagnosis.grade:
-            _stage_display = diagnosis.grade
+        _stage_code = None
+        _stage_code , _stage_display = self.fetch_stage_info(diagnosis)
 
         stage_summary = None
-        if _stage_display:
+        if _stage_code:
             stage_summary = CodeableConcept(**{
                 "coding": [
                     {
-                        "system": f"https://{CDA_SITE}/",
-                        "code": _stage_display,
+                        "system": _stage_code['system'],
+                        "code": _stage_code['code'],
                         "display": _stage_display
                     }
                 ]
@@ -658,8 +655,8 @@ class ConditionTransformer(Transformer):
             onset = str(diagnosis.age_at_diagnosis)
 
         _condition_observation = None
-        if _stage_display:
-            _condition_observation = self.condition_observation(diagnosis, _stage_display, patient, condition_id)
+        if _stage_code:
+            _condition_observation = self.condition_observation(diagnosis, _stage_code, _stage_display, patient, condition_id)
 
         stage = []
         if stage_summary and _condition_observation:
@@ -683,6 +680,13 @@ class ConditionTransformer(Transformer):
         else:
             code = diagnosis.primary_diagnosis
             display = diagnosis.primary_diagnosis
+
+        part_of_extension = None
+        if hasattr(patient, "extension") and patient.extension:
+            for ext in patient.extension:
+                if ext.url == "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study":
+                    part_of_extension = ext
+                    break
 
         _condition = Condition(
             **{
@@ -715,32 +719,105 @@ class ConditionTransformer(Transformer):
                                     "display": display}]}
                 ),
                 "onsetString": onset,
-                "stage": stage
+                "stage": stage,
+                **({"extension": [part_of_extension]} if part_of_extension else {})
             }
         )
         return _condition
 
-    def condition_observation(self, diagnosis, display, patient, _condition_id) -> Observation:
+
+    def fetch_stage_info(self, diagnosis) -> tuple | None:
+        _code = None
+        _display = None
+        if diagnosis.pathologic_stage:
+            _display = diagnosis.pathologic_stage
+            _code = {
+                "system": "http://snomed.info/sct",
+                "code": "1222593009",
+                "display": "American Joint Committee on Cancer pathological stage group allowable value"
+            }
+        elif diagnosis.pathologic_stage_t:
+            _display = diagnosis.pathologic_stage_t
+            _code = {
+                "system": "http://snomed.info/sct",
+                "code": "1222589003",
+                "display": "American Joint Committee on Cancer pathological T category allowable value"
+
+            }
+        elif diagnosis.pathologic_stage_n:
+            _display = diagnosis.pathologic_stage_n
+            _code = {
+                "system": "http://snomed.info/sct",
+                "code": "1222590007",
+                "display": "American Joint Committee on Cancer pathological N category allowable value"
+
+            }
+        elif diagnosis.pathologic_stage_m:
+            _display = diagnosis.pathologic_stage_m
+            _code = {
+                "system": "http://snomed.info/sct",
+                "code": "1222591006",
+                "display": "American Joint Committee on Cancer pathological M category allowable value"
+
+            }
+        elif diagnosis.grade:
+            _display = diagnosis.grade
+            _code = {
+                "system": "http://snomed.info/sct",
+                "code": "1222599008",
+                "display": "American Joint Committee on Cancer pathological grade allowable value"
+            }
+        elif diagnosis.clinical_stage:
+            _display = diagnosis.clinical_stage
+            _code = {
+                "system": "http://snomed.info/sct",
+                "code": "1222592004",
+                "display": "American Joint Committee on Cancer clinical stage group allowable value"
+
+            }
+        elif diagnosis.clinical_stage_t:
+            _display = diagnosis.clinical_stage_t
+            _code = {
+                "system": "http://snomed.info/sct",
+                "code": "1222585009",
+                "display": "American Joint Committee on Cancer clinical T category allowable value"
+
+            }
+        elif diagnosis.clinical_stage_n:
+            _display = diagnosis.clinical_stage_n
+            _code = {
+                "system": "http://snomed.info/sct",
+                "code": "1222588006",
+                "display": "American Joint Committee on Cancer clinical N category allowable value"
+
+            }
+        elif diagnosis.clinical_stage_m:
+            _display = diagnosis.clinical_stage_m
+            _code = {
+                "system": "http://snomed.info/sct",
+                "code": "1222587001",
+                "display": "American Joint Committee on Cancer clinical M category allowable value"
+
+            }
+
+        return _code, _display
+
+    def condition_observation(self, diagnosis, _stage_code, _stage_display, patient, _condition_id) -> Observation | None:
         condition_id_system = "".join([f"https://{CDA_SITE}/", "diagnosis"])
         observation_identifier = Identifier(**{'system': condition_id_system, 'value': diagnosis.id, "use": "official"})
         observation_id = self.mint_id(identifier=observation_identifier, resource_type="Observation")
 
-        observation_code = None
-        if diagnosis.stage:
-            observation_code = {
-                "system": "https://thesaurus.cancer.gov",
-                "code": "C177556",
-                "display": "AJCC v8 Pathologic Stage"
-            }
-        elif diagnosis.grade:
-            observation_code = {
-                "system": "http://loinc.org",
-                "code": "33732-9",
-                "display": "Histology grade [Identifier] in Cancer specimen"
-            }
-        if observation_code is None:
-            print(f"Skipping Observation for diagnosis condition {diagnosis.id}")
-            return None
+        # observation_code = self.fetch_stage_info(diagnosis)
+        # if observation_code is None:
+        #     print(f"Skipping .... Observation for diagnosis condition {diagnosis.id} doesn't exist.")
+        #     return None
+
+        part_of_extension = None
+        if hasattr(patient, "extension") and patient.extension:
+            for ext in patient.extension:
+                if ext.url == "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study":
+                    part_of_extension = ext
+                    break
 
         observation = Observation(
             **{
@@ -759,7 +836,7 @@ class ConditionTransformer(Transformer):
                     }
                 ],
                 "code": {
-                    "coding": [observation_code]
+                    "coding": [_stage_code]
                 },
                 "subject": {
                     "reference": f"Patient/{patient.id}"
@@ -769,12 +846,13 @@ class ConditionTransformer(Transformer):
                 }],
                 "valueCodeableConcept": {
                     "coding": [{
-                        "system": f"https://{CDA_SITE}/",
-                        "code": display,
-                        "display": display
+                        "system": _stage_code['system'],
+                        "code": _stage_code['code'],
+                        "display": _stage_display
                     }
                     ]
-                }
+                },
+                **({"extension": [part_of_extension]} if part_of_extension else {})
             }
         )
         return observation
