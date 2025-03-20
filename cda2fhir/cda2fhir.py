@@ -21,6 +21,7 @@ from sqlalchemy import select, func, or_,  and_
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm import contains_eager
+from fhir.resources.extension import Extension
 
 gdc_dbgap_names = ['APOLLO', 'CDDP_EAGLE', 'CGCI', 'CTSP', 'EXCEPTIONAL_RESPONDERS', 'FM', 'HCMI', 'MMRF', 'NCICCR',
                    'OHSU', 'ORGANOID', 'REBC', 'TARGET', 'TCGA', 'TRIO', 'VAREPOP', 'WCDT']
@@ -564,15 +565,19 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                                 for ref in part_refs:
                                     existing_refs.setdefault(ref.reference, ref)
                                 study.partOf = list(existing_refs.values())
-                            part_of_extension = []
+
+                            part_of_extensions = []
                             for ref in study.partOf:
                                 if ref:
-                                    part_of_extension.append({
-                                        "url": "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
-                                        "valueReference": ref
-                                    })
-                            if part_of_extension and study.extension:
-                                study.extension.append(part_of_extension)
+                                    ext = Extension(
+                                        url="http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study",
+                                        valueReference=ref
+                                    )
+                                    part_of_extensions.append(ext)
+                            if part_of_extensions:
+                                if not study.extension:
+                                    study.extension = []
+                                study.extension.extend(part_of_extensions)
 
                         except Exception:
                             logger.exception("Error computing partOf references for subject %s and study %s",
