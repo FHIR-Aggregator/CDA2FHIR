@@ -1526,7 +1526,13 @@ class MedicationAdministrationTransformer(Transformer):
         medication_reference = {"reference": f"Medication/{medication.id}"} if medication else None
 
         extensions = []
+        _extensions = []
         self.get_part_of_study_extension(subject, extensions= extensions)
+        if isinstance(extensions[0], dict):
+            for e in extensions:
+                _extensions.append(Extension(**e))
+        else:
+            _extensions = extensions
 
         med_admin = {
             "id": medication_admin_id,
@@ -1546,11 +1552,12 @@ class MedicationAdministrationTransformer(Transformer):
                 "reference": medication_reference
             },
             "subject": {"reference": f"Patient/{fhir_patient_id}"},
-            "occurenceTiming": timing,
-            "extensions": extensions
+            "occurenceTiming": timing
         }
-
-        return MedicationAdministration(**med_admin)
+        md = MedicationAdministration(**med_admin)
+        if _extensions and md:
+            md.extension = _extensions
+        return md
 
 
 class MutationTransformer(Transformer):

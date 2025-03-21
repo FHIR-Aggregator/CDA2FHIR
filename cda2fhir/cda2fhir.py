@@ -7,6 +7,7 @@ from functools import lru_cache
 from fhir.resources.identifier import Identifier
 from fhir.resources.reference import Reference
 from fhir.resources.documentreference import DocumentReference
+from fhir.resources.medication import Medication
 from fhir.resources.group import Group
 from cda2fhir.load_data import load_data
 from cda2fhir.database import SessionLocal
@@ -144,14 +145,21 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 #         .all()
                 #     )
 
+                _medication = None
                 if _subject_treatment:
                     for subject in _subject_treatment:
                         compound_name = treatment.therapeutic_agent.upper() if treatment.therapeutic_agent else None
-                        medication = next((med for med in medications if med.code.coding[0].code == compound_name), None)
+                        for med in medications:
+                            if isinstance(med, dict) and med['code']['coding'][0]['code'] == compound_name:
+                                _medication = Medication(**med)
+                            if isinstance(med, Medication) and med.code.coding[0].code == compound_name:
+                                _medication = med
+
+                        # medication = next((med for med in medications if isinstance(med, Medication) and med.code.coding[0].code == compound_name), None)
                         med_admin = treatment_transformer.create_medication_administration(
                             treatment=treatment,
                             subject=subject,
-                            medication=medication
+                            medication=_medication
                         )
 
                         if med_admin:
