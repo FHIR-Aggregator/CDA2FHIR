@@ -82,6 +82,20 @@ filtered_combined_files = [
     record for record in combined_files_data
     if record.get('integer_id_alias') in file_aliases
 ]
+
+file_specimen = RAW_DATA_PATH / 'file_specimen.json'
+file_specimen_mappings = load_json_file(file_specimen)
+
+filtered_file_specimen = [
+    record for record in file_specimen_mappings
+    if record.get('file_alias') in file_aliases
+]
+output_reduced_file_specimen = RAW_DATA_PATH / 'reduced_file_specimen.json'
+output_reduced_file_subject = RAW_DATA_PATH / 'reduced_file_subject.json'
+
+save_json_file(filtered_file_specimen, output_reduced_file_specimen)
+save_json_file(filtered_file_subjects, output_reduced_file_subject)
+
 # ------------------
 
 mutations = load_json_file(mutation_file)
