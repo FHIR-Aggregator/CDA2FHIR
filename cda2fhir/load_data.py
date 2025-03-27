@@ -162,12 +162,12 @@ def load_file_relations(session):
     Loads file_subject and file_specimen relationships.
     """
     load_to_db(str(Path(importlib.resources.files(
-        'cda2fhir').parent / 'data' / 'raw' / 'human_file_subject.tsv')),
+        'cda2fhir').parent / 'data' / 'raw_022025' / 'reduced_file_subject.json')),
                CDAFileSubject, session)
     print(f"Loaded CDAFileSubject relationships")
 
     load_to_db(str(Path(importlib.resources.files(
-        'cda2fhir').parent / 'data' / 'raw' / 'association_tables' / 'file_specimen.tsv')),
+        'cda2fhir').parent / 'data' / 'raw_022025' / 'reduced_file_specimen.json')),
                CDAFileSpecimen, session)
     print(f"Loaded CDAFileSpecimen relationships")
 
@@ -267,7 +267,7 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
             # if not file_paths:
             #     raise ValueError("Project-specific files were not found.")
 
-            # load_file_relations(session)
+            load_file_relations(session)
 
             file_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'files_converted'/ 'cholangiocarcinoma_files.json'))
             load_to_db(file_path, CDAFile, session)
