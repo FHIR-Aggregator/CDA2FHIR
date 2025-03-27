@@ -249,7 +249,7 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
 
         if transform_mutation:
             # load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'/ 'CGCI-BLGSP_mutations.json')), CDAMutation, session)
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'mutation.json')), CDAMutation, session)
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'cholangiocarcinoma_mutations.json')), CDAMutation, session)
 
             # mutation_folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'project_mutations'))
             # mutation_file_paths = glob.glob(os.path.join(mutation_folder_path, '*'))
@@ -261,15 +261,15 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
                         CDASubjectMutation, session)
 
         if transform_files:
-            files_dir = Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'files_converted')
-            file_paths = list(files_dir.glob('*'))  # glob all files in the directory
+            # files_dir = Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'files_converted')
+            # file_paths = list(files_dir.glob('*'))  # glob all files in the directory
+            #
+            # if not file_paths:
+            #     raise ValueError("Project-specific files were not found.")
 
-            if not file_paths:
-                raise ValueError("Project-specific files were not found.")
+            # load_file_relations(session)
 
-            load_file_relations(session)
-
-            file_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'files_converted'/ 'files_project_TCGA-KIRC_converted.json'))
+            file_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'files_converted'/ 'cholangiocarcinoma_files.json'))
             load_to_db(file_path, CDAFile, session)
 
             file_size_mb = os.path.getsize(file_path) / (1024 ** 2)

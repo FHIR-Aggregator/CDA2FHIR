@@ -1606,6 +1606,14 @@ class MutationTransformer(Transformer):
         extensions = []
         self.get_part_of_study_extension(subject, extensions=extensions)
 
+        _extensions = []
+        self.get_part_of_study_extension(subject, extensions=extensions)
+        if isinstance(extensions[0], dict):
+            for e in extensions:
+                _extensions.append(Extension(**e))
+        else:
+            _extensions = extensions
+
         obs = Observation(
             **{
                 "id": mutation_id,
@@ -1637,8 +1645,8 @@ class MutationTransformer(Transformer):
                 "focus": [{
                     "reference": f"Patient/{fhir_patient_id}" #TODO: add specimen
                 }],
-                "component": components,
-                "extensions": extensions
+                "component": components
             }
         )
+        obs.extension = _extensions
         return obs
