@@ -20,18 +20,10 @@ def file_size(file_path):
     return os.path.getsize(file_path) / (1024 ** 3)  #size in GB
 
 
-def load_to_db(paths, table_class, session, check_species=False):
-    """
-    Load data from a single file or list of files (JSON, CSV, Excel, TSV) into the database.
+seen_keys = set()
 
-    Parameters:
-        paths: A single file path or a list of file paths.
-        table_class: The SQLAlchemy model class to load data into.
-        session: The SQLAlchemy session.
-        check_species: If True, check for a 'species' field in JSON records.
-                         If the field exists, only load the record if its value is 'Human' or 'Homo sapiens'.
-                         If the field does not exist, assume the record is human.
-    """
+
+def load_to_db(paths, table_class, session, check_species=False):
     import json, mimetypes
     from sqlalchemy.exc import IntegrityError
     import pandas as pd
@@ -40,6 +32,8 @@ def load_to_db(paths, table_class, session, check_species=False):
 
     if isinstance(paths, str):
         paths = [paths]
+
+    seen_keys = set() if table_class.__tablename__ == 'file_subject' else None
 
     for path in paths:
         print("####### Processing PATH: ", path)
@@ -55,6 +49,14 @@ def load_to_db(paths, table_class, session, check_species=False):
                                 continue
                         else:
                             line["species"] = "Human"
+
+                    if table_class.__tablename__ == 'file_subject' and seen_keys is not None:
+                        key = (line.get('file_alias'), line.get('subject_alias'))
+                        if key in seen_keys:
+                            print(f"Duplicate found (in-memory), skipping entry in {table_class.__tablename__}: {line}")
+                            continue
+                        seen_keys.add(key)
+
                     try:
                         session.add(table_class(**line))
                     except IntegrityError:
@@ -72,13 +74,20 @@ def load_to_db(paths, table_class, session, check_species=False):
                 continue
 
             for row in df.to_dict(orient='records'):
+                if table_class.__tablename__ == 'file_subject' and seen_keys is not None:
+                    key = (row.get('file_alias'), row.get('subject_alias'))
+                    if key in seen_keys:
+                        print(f"Duplicate found (in-memory), skipping entry in {table_class.__tablename__}: {row}")
+                        continue
+                    seen_keys.add(key)
+
                 try:
                     session.add(table_class(**row))
                 except IntegrityError:
                     session.rollback()
                     print(f"Skipping duplicate entry in {table_class.__tablename__}: {row}")
 
-        session.flush()  # flush changes to the database
+        session.flush()
         session.commit()
 
 
@@ -164,12 +173,12 @@ def load_file_relations(session):
     load_to_db(str(Path(importlib.resources.files(
         'cda2fhir').parent / 'data' / 'raw_022025' / 'reduced_file_subject.json')),
                CDAFileSubject, session)
-    print(f"Loaded CDAFileSubject relationships")
+    # print(f"Loaded CDAFileSubject relationships")
 
     load_to_db(str(Path(importlib.resources.files(
         'cda2fhir').parent / 'data' / 'raw_022025' / 'reduced_file_specimen.json')),
                CDAFileSpecimen, session)
-    print(f"Loaded CDAFileSpecimen relationships")
+    # print(f"Loaded CDAFileSpecimen relationships")
 
 
 def load_data(transform_condition, transform_files, transform_treatment, transform_mutation):
@@ -269,11 +278,11 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
 
             load_file_relations(session)
 
-            file_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'files_converted'/ 'cholangiocarcinoma_files.json'))
+            file_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'cholangiocarcinoma_files.json'))
             load_to_db(file_path, CDAFile, session)
 
             file_size_mb = os.path.getsize(file_path) / (1024 ** 2)
-            print(f"File: {file_path}, Size: {file_size_mb:.2f} MB")
+            # print(f"File: {file_path}, Size: {file_size_mb:.2f} MB")
 
             # folder_path = str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw' / 'files_converted'))
             # file_paths = glob.glob(os.path.join(folder_path, '*'))
@@ -282,6 +291,7 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
 
             # large file - can be useful to reduce the relations files by CDA project as well
             # file alias -> project  join by file id with file_subject
+
 
     finally:
         session.expire_all()

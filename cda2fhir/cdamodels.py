@@ -277,7 +277,7 @@ class CDAFile(Base):
     imaging_modality: Mapped[Optional[str]] = mapped_column(String)
     dbgap_accession_number: Mapped[Optional[str]] = mapped_column(String)
     imaging_series: Mapped[Optional[str]] = mapped_column(String)
-    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer)
+    integer_id_alias: Mapped[Optional[int]] = mapped_column(Integer, unique=True)
     specimen_file_relation: Mapped[List["CDAFileSpecimen"]] = relationship(
         back_populates="file"
     )
