@@ -1,0 +1,9 @@
+services:
+  cda2fhir-service:
+    build:
+      context: .
+    volumes:
+      - ./data/raw:/app/CDA2FHIR/data/raw
+      - ./data/META:/app/CDA2FHIR/data/META
+    entrypoint: ["/bin/bash"]
+    # entrypoint: [ "cda2fhir", "transform", "-m" ]
