@@ -49,39 +49,22 @@ Options:
 cda2fhir transform 
 ``` 
 
-NOTE: in-case of interest in validating your FHIR data with GEN3, you will need to go through the [user-guide, setup, and documentation of GEN3 tracker](https://aced-idp.github.io/requirements/) before running the ```cda2fhir``` commands.
-
 ### FHIR data validation 
-
-#### disable gen3-client
-```
-mv ~/.gen3/gen3_client_config.ini ~/.gen3/gen3_client_config.ini-xxx
-mv ~/.gen3/gen3-client ~/.gen3/gen3-client-xxx
-```
 
 #### Run validate
 ```
- time cda2fhir validate
-{'summary': {'Specimen': 721837, 'Observation': 731005, 'ResearchStudy': 423, 'BodyStructure': 163, 'Condition': 95262, 'ResearchSubject': 160649, 'Patient': 138738}}
-
-real    5m
-user    5m
-sys     0m5.1s
-
+ cda2fhir validate --path data/META
+{'summary': {'Specimen': 742505, 'Medication': 214, 'Observation': 832864, 'ResearchStudy': 429, 'SubstanceDefinition': 214, 'BodyStructure': 135, 'Condition': 114804, 'ResearchSubject': 184888, 'MedicationAdministration': 38267, 'Patient': 159047, 'Substance': 214}}
 ```
-
-#### Restore gen3-client
-
-```
-mv ~/.gen3/gen3-client-xxx ~/.gen3/gen3-client
-mv ~/.gen3/gen3_client_config.ini-xxx ~/.gen3/gen3_client_config.ini
-  
-```
-
 
 This command will validate your FHIR entities and their reference relations to each other. It will also generate a summary count of all entities in each ndjson file. 
 
 NOTE: This process may take _**5 minutes**_ or more, depending on your platform or compute power due to the size of the current data.
+
+#### Check for a field ex. extension
+```bash
+awk '!/extension/ {exit 1}' data/META/ResearchSubject.ndjson && echo "Every line contains 'extension'" || echo "Not every line contains 'extension'"
+```
 
 
 ### Testing
