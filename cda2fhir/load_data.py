@@ -266,7 +266,7 @@ def load_data(transform_condition, transform_files, transform_treatment, transfo
             #
             # load_to_db(mutation_file_paths, CDAMutation, session)
             #
-            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'subject_mutation.json')),
+            load_to_db(str(Path(importlib.resources.files('cda2fhir').parent / 'data' / 'raw_022025' / 'subject_cholangiocarcinoma_mutation.json')),
                         CDASubjectMutation, session)
 
         if transform_files:
