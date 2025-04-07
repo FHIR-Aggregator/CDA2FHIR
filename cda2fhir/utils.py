@@ -453,3 +453,45 @@ def assign_part_of(entity, research_study_id):
         add_extension(entity, part_of_study_extension)
 
     return entity
+
+
+
+def deduplicate_extensions(data) -> dict:
+    for item in data:
+        unique_extensions = []
+        seen_references = set()
+        for ext in item['extension']:
+            if 'valueReference' in ext and ext['url'] == "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study":
+                ref = ext['valueReference']['reference']
+                if ref and ref not in seen_references:
+                    seen_references.add(ref)
+                    unique_extensions.append(ext)
+            else:
+                unique_extensions.append(ext)
+        item['extension'] = unique_extensions
+    return data
+
+
+def add_cda_extension_to_all(resources, cda_extension) -> list:
+    for resource in resources:
+        if 'extension' not in resource or not isinstance(resource['extension'], list):
+            resource['extension'] = []
+        resource['extension'].append(cda_extension)
+    return resources
+
+
+def load_ndjson(path):
+    try:
+        with open(path, 'r') as file:
+            obj = [json.loads(line) for line in file]
+            return obj
+    except json.JSONDecodeError as e:
+        print(e)
+
+# entities = ["Patient", "Condition", "MedicationAdministration", "Observation", "ResearchStudy", "ResearchSubject", "Specimen"]
+# for ent in entities:
+#     path = f"{ent}.ndjson"
+#     output_file = f"{ent}_cleaned.ndjson"
+#     data = load_ndjson(path)
+#     deduplicate_extensions(data)
+#     fhir_ndjson(data, output_file)
