@@ -74,7 +74,7 @@ no_project_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(messag
 no_project_handler.setFormatter(no_project_formatter)
 no_project_logger.addHandler(no_project_handler)
 
-logger.debug("Logging is now configured.")
+# logger.debug("Logging is now configured.")
 
 class Transformer:
     def __init__(self, session: Session):
@@ -681,6 +681,15 @@ class ConditionTransformer(Transformer):
             code = diagnosis.primary_diagnosis
             display = diagnosis.primary_diagnosis
 
+        if "cholangiocarcinoma" in diagnosis.primary_diagnosis.lower():
+            code = "70179006"
+            display = "Cholangiocarcinoma"
+
+        if code == "70179006":
+            system = "http://snomed.info/sct"
+        else:
+            system = f"https://{CDA_SITE}/"
+
         part_of_extension = None
         if hasattr(patient, "extension") and patient.extension:
             for ext in patient.extension:
@@ -714,7 +723,7 @@ class ConditionTransformer(Transformer):
                 )],
                 "code": CodeableConcept(
                     **{
-                        "coding": [{"system": f"https://{CDA_SITE}/",
+                        "coding": [{"system": system,
                                     "code": code,
                                     "display": display}]}
                 ),
@@ -857,8 +866,16 @@ class ConditionTransformer(Transformer):
         )
         return observation
 
-    def observation_method_of_diagnosis(self, method_of_diagnosis) -> Observation:
+    def observation_method_of_diagnosis(self, method_of_diagnosis, patient) -> Observation:
         """observation for official method_of_diagnosis of CDA patient."""
+
+        part_of_extension = None
+        if hasattr(patient, "extension") and patient.extension:
+            for ext in patient.extension:
+                if ext.url == "http://fhir-aggregator.org/fhir/StructureDefinition/part-of-study":
+                    part_of_extension = ext
+                    break
+
         obs = Observation(**{
             "resourceType": "Observation",
             "id": "observation-method-of-diagnosis",
@@ -886,7 +903,8 @@ class ConditionTransformer(Transformer):
             "subject": {
                 "reference": f"Patient/example"
             },
-            "valueString": method_of_diagnosis
+            "valueString": method_of_diagnosis,
+            **({"extension": [part_of_extension]} if part_of_extension else {})
         })
         return obs
 
@@ -1552,7 +1570,7 @@ class MedicationAdministrationTransformer(Transformer):
                 "reference": medication_reference
             },
             "subject": {"reference": f"Patient/{fhir_patient_id}"},
-            "occurenceTiming": timing
+            "occurenceTiming": timing # there isn't an equivalent in R4
         }
         md = MedicationAdministration(**med_admin)
         if _extensions and md:
