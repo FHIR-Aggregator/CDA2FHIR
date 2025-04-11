@@ -126,7 +126,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             if save and substance_definitions:
                 substance_definitions = utils.load_list_entities(substance_definitions)
                 # substance_definitions = utils.add_cda_extension_to_all(substance_definitions, cda_extension)
-                substance_definitions = utils.deduplicate_extensions(substance_definitions)
+                # substance_definitions = utils.deduplicate_extensions(substance_definitions)
 
                 cleaned_substance_definitions = utils.clean_resources(substance_definitions)
                 utils.deduplicate_and_save(cleaned_substance_definitions, "SubstanceDefinition.ndjson", meta_path, save)
@@ -134,14 +134,14 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             if save and substances:
                 substances = utils.load_list_entities(substances)
                 # substances = utils.add_cda_extension_to_all(substances, cda_extension)
-                substances = utils.deduplicate_extensions(substances)
+                # substances = utils.deduplicate_extensions(substances)
                 cleaned_substances = utils.clean_resources(substances)
                 utils.deduplicate_and_save(cleaned_substances, "Substance.ndjson", meta_path, save)
 
             if save and medications:
                 medications = utils.load_list_entities(medications)
                 # medications = utils.add_cda_extension_to_all(medications, cda_extension)
-                medications = utils.deduplicate_extensions(medications)
+                # medications = utils.deduplicate_extensions(medications)
                 cleaned_medications = utils.clean_resources(medications)
                 utils.deduplicate_and_save(cleaned_medications, "Medication.ndjson", meta_path, save)
 
