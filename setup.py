@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-__version__ = '1.4.1'
+__version__ = '1.4.2'
 
 setup(
     name='cda2fhir',
@@ -31,7 +31,9 @@ setup(
         'iteration_utilities',
         'gen3-tracker>=0.0.7rc2',
         'fhir.resources==8.0.0b4',  # FHIR® (Release R5, version 5.0.0)
-        'sqlalchemy>=2.0.31'
+        'sqlalchemy>=2.0.31',
+        'scipy',
+        'lifelines'
     ],
     # package_data={'cda2fhir': []},
     tests_require=['pytest'],
