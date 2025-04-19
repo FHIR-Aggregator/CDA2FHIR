@@ -125,23 +125,23 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
             if save and substance_definitions:
                 substance_definitions = utils.load_list_entities(substance_definitions)
-                substance_definitions = utils.add_cda_extension_to_all(substance_definitions, cda_extension)
-                substance_definitions = utils.deduplicate_extensions(substance_definitions)
+                # substance_definitions = utils.add_cda_extension_to_all(substance_definitions, cda_extension)
+                # substance_definitions = utils.deduplicate_extensions(substance_definitions)
 
                 cleaned_substance_definitions = utils.clean_resources(substance_definitions)
                 utils.deduplicate_and_save(cleaned_substance_definitions, "SubstanceDefinition.ndjson", meta_path, save)
 
             if save and substances:
                 substances = utils.load_list_entities(substances)
-                substances = utils.add_cda_extension_to_all(substances, cda_extension)
-                substances = utils.deduplicate_extensions(substances)
+                # substances = utils.add_cda_extension_to_all(substances, cda_extension)
+                # substances = utils.deduplicate_extensions(substances)
                 cleaned_substances = utils.clean_resources(substances)
                 utils.deduplicate_and_save(cleaned_substances, "Substance.ndjson", meta_path, save)
 
             if save and medications:
                 medications = utils.load_list_entities(medications)
-                medications = utils.add_cda_extension_to_all(medications, cda_extension)
-                medications = utils.deduplicate_extensions(medications)
+                # medications = utils.add_cda_extension_to_all(medications, cda_extension)
+                # medications = utils.deduplicate_extensions(medications)
                 cleaned_medications = utils.clean_resources(medications)
                 utils.deduplicate_and_save(cleaned_medications, "Medication.ndjson", meta_path, save)
 
@@ -250,7 +250,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
                 if mutation_observations:
                     fhir_mutation_obs = [orjson.loads(mo.json()) for mo in mutation_observations if mo]
-                    fhir_mutation_obs = utils.add_cda_extension_to_all(fhir_mutation_obs, cda_extension)
+                    # fhir_mutation_obs = utils.add_cda_extension_to_all(fhir_mutation_obs, cda_extension)
                     fhir_mutation_obs = utils.deduplicate_extensions(fhir_mutation_obs)
                     cleaned_fhir_mutation_obs = utils.clean_resources(fhir_mutation_obs)
                     utils.create_or_extend(new_items=cleaned_fhir_mutation_obs, folder_path='data/META',
@@ -320,13 +320,13 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
             if save and fhir_specimens:
                 fhir_specimens = utils.load_list_entities(fhir_specimens)
-                fhir_specimens = utils.add_cda_extension_to_all(fhir_specimens, cda_extension)
+                # fhir_specimens = utils.add_cda_extension_to_all(fhir_specimens, cda_extension)
                 fhir_specimens = utils.deduplicate_extensions(fhir_specimens)
                 cleaned_fhir_specimens = utils.clean_resources(fhir_specimens)
                 utils.deduplicate_and_save(cleaned_fhir_specimens, "Specimen.ndjson", meta_path, save)
                 if specimen_bds:
                     specimen_bds = utils.load_list_entities(specimen_bds)
-                    specimen_bds = utils.add_cda_extension_to_all(specimen_bds, cda_extension)
+                    # specimen_bds = utils.add_cda_extension_to_all(specimen_bds, cda_extension)
                     specimen_bds = utils.deduplicate_extensions(specimen_bds)
                     cleaned_specimen_bds = utils.clean_resources(specimen_bds)
                     utils.deduplicate_and_save(cleaned_specimen_bds, "BodyStructure.ndjson", meta_path, save)
@@ -349,7 +349,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
             if save and patients:
                 patients = utils.load_list_entities(patients)
-                patients = utils.add_cda_extension_to_all(patients, cda_extension)
+                # patients = utils.add_cda_extension_to_all(patients, cda_extension)
                 patients = utils.deduplicate_extensions(patients)
                 cleaned_patients = utils.clean_resources(patients)
                 utils.deduplicate_and_save(cleaned_patients, "Patient.ndjson", meta_path, save)
@@ -634,19 +634,24 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                 return research_studies, research_subjects
 
             research_studies, research_subjects = process_projects(session)
+
+            for rs in research_studies:
+                if rs.name in ["GDC", "IDC", "PDC", "ICDC", "CDS"]:
+                    rs.partOf =  [{"reference": f"ResearchStudy/{CDA_research_study.id}"}]
+
             research_studies.append(CDA_research_study)
 
 
             if save and research_studies:
                 research_studies = utils.load_list_entities(research_studies)
-                research_studies = utils.add_cda_extension_to_all(research_studies, cda_extension)
+                # research_studies = utils.add_cda_extension_to_all(research_studies, cda_extension)
                 research_studies = utils.deduplicate_extensions(research_studies)
                 cleaned_research_studies = utils.clean_resources(research_studies)
                 utils.deduplicate_and_save(cleaned_research_studies, "ResearchStudy.ndjson", meta_path, save)
 
             if save and research_subjects:
                 research_subjects = utils.load_list_entities(research_subjects)
-                research_subjects = utils.add_cda_extension_to_all(research_subjects, cda_extension)
+                # research_subjects = utils.add_cda_extension_to_all(research_subjects, cda_extension)
                 research_subjects = utils.deduplicate_extensions(research_subjects)
                 cleaned_research_subjects = utils.clean_resources(research_subjects)
                 utils.deduplicate_and_save(cleaned_research_subjects, "ResearchSubject.ndjson", meta_path, save)
@@ -654,7 +659,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             if save and observations:
                 obs_dedup = {_obs.id: _obs for _obs in observations if _obs}.values()
                 fhir_observation = [orjson.loads(_observation.json()) for _observation in obs_dedup]
-                fhir_observation = utils.add_cda_extension_to_all(fhir_observation, cda_extension)
+                # fhir_observation = utils.add_cda_extension_to_all(fhir_observation, cda_extension)
                 fhir_observation = utils.deduplicate_extensions(fhir_observation)
                 cleaned_fhir_observation = utils.clean_resources(fhir_observation)
                 utils.create_or_extend(new_items=cleaned_fhir_observation, folder_path='data/META', resource_type='Observation', update_existing=False)
@@ -747,7 +752,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
 
             if save and conditions:
                 conditions = utils.load_list_entities(conditions)
-                conditions = utils.add_cda_extension_to_all(conditions, cda_extension)
+                # conditions = utils.add_cda_extension_to_all(conditions, cda_extension)
                 conditions = utils.deduplicate_extensions(conditions)
                 cleaned_conditions = utils.clean_resources(conditions)
                 utils.deduplicate_and_save(cleaned_conditions, "Condition.ndjson", meta_path, save)
@@ -755,7 +760,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
             if save and condition_observations:
                 condition_observations_dedup = {_obs.id: _obs for _obs in condition_observations if _obs}.values()
                 fhir_condition_observation = [orjson.loads(_observation.json()) for _observation in condition_observations_dedup]
-                fhir_condition_observation = utils.add_cda_extension_to_all(fhir_condition_observation, cda_extension)
+                # fhir_condition_observation = utils.add_cda_extension_to_all(fhir_condition_observation, cda_extension)
                 fhir_condition_observation = utils.deduplicate_extensions(fhir_condition_observation)
                 cleaned_condition_observations = utils.clean_resources(fhir_condition_observation)
                 utils.create_or_extend(new_items=cleaned_condition_observations, folder_path='data/META',
@@ -880,8 +885,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     if save and all_files:
                         document_references = {_doc_ref.id: _doc_ref for _doc_ref in all_files if _doc_ref}.values()
                         fhir_document_references = [orjson.loads(doc_ref.json()) for doc_ref in document_references]
-                        fhir_document_references = utils.add_cda_extension_to_all(fhir_document_references,
-                                                                                    cda_extension)
+                        # fhir_document_references = utils.add_cda_extension_to_all(fhir_document_references, cda_extension)
                         fhir_document_references = utils.deduplicate_extensions(fhir_document_references)
                         cleaned_fhir_document_references = utils.clean_resources(fhir_document_references)
                         utils.create_or_extend(new_items=cleaned_fhir_document_references, folder_path='data/META',
@@ -890,8 +894,7 @@ def cda2fhir(path, n_samples, n_diagnosis, transform_condition, transform_files,
                     if save and all_groups:
                         groups = {group.id: group for group in all_groups if group.id}.values()
                         fhir_groups = [orjson.loads(group.json()) for group in groups]
-                        fhir_groups = utils.add_cda_extension_to_all(fhir_groups,
-                                                                                    cda_extension)
+                        # fhir_groups = utils.add_cda_extension_to_all(fhir_groups, cda_extension)
                         fhir_groups = utils.deduplicate_extensions(fhir_groups)
                         cleaned_fhir_groups = utils.clean_resources(fhir_groups)
                         utils.create_or_extend(new_items=cleaned_fhir_groups, folder_path='data/META', resource_type='Group',
